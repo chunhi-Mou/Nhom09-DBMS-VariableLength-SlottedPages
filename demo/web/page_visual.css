@@ -1,0 +1,318 @@
+﻿:root {
+    color-scheme: light;
+    --bg: #fffaf1;
+    --panel: rgba(255, 255, 255, 0.94);
+    --ink: #163042;
+    --muted: #5c7080;
+    --line: #bfd3df;
+    --shadow: 0 18px 38px rgba(22, 48, 66, 0.12);
+    --radius: 26px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Segoe UI Variable Text", "Trebuchet MS", sans-serif;
+    color: var(--ink);
+    background:
+        radial-gradient(circle at top left, rgba(255, 223, 162, 0.58), transparent 24%),
+        radial-gradient(circle at top right, rgba(179, 214, 255, 0.52), transparent 20%),
+        linear-gradient(180deg, #fffdf8 0%, var(--bg) 100%);
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(rgba(22, 48, 66, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(22, 48, 66, 0.04) 1px, transparent 1px);
+    background-size: 30px 30px;
+    pointer-events: none;
+}
+
+.page-shell {
+    width: min(1260px, calc(100vw - 28px));
+    margin: 18px auto;
+    padding: 22px;
+    border: 1px solid rgba(191, 211, 223, 0.88);
+    border-radius: 30px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 251, 243, 0.94));
+    box-shadow: var(--shadow);
+}
+
+.page-shell-error {
+    max-width: 760px;
+}
+
+.hero-copy h1 {
+    margin: 0;
+    font-size: clamp(1.8rem, 3.8vw, 2.5rem);
+    letter-spacing: 0.01em;
+}
+
+.hero-copy p {
+    margin: 8px 0 0;
+    max-width: 68ch;
+    color: var(--muted);
+    line-height: 1.48;
+}
+
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 18px 0 14px;
+}
+
+.step-btn,
+.control-btn {
+    border: 1px solid rgba(126, 156, 177, 0.48);
+    background: rgba(255, 255, 255, 0.88);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 10px 16px;
+    font: inherit;
+    cursor: pointer;
+    transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+}
+
+.step-btn:hover,
+.control-btn:hover,
+.step-btn.active {
+    transform: translateY(-1px);
+    background: #fef2d6;
+    border-color: rgba(222, 161, 66, 0.72);
+}
+
+.step-btn:disabled,
+.control-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+    transform: none;
+}
+
+.control-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.stage {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1.72fr) minmax(280px, 0.78fr);
+}
+
+.canvas-card,
+.detail-card {
+    border-radius: var(--radius);
+    border: 1px solid rgba(191, 211, 223, 0.9);
+    background: var(--panel);
+    padding: 16px;
+}
+
+.canvas-card {
+    overflow: hidden;
+}
+
+.state-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: start;
+}
+
+.state-title {
+    margin: 0;
+    font-size: 1.34rem;
+}
+
+.state-note {
+    margin: 6px 0 0;
+    color: var(--muted);
+    line-height: 1.45;
+    max-width: 62ch;
+}
+
+.state-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #f4f8fb;
+    border: 1px solid rgba(191, 211, 223, 0.88);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.badge-time {
+    background: #fff3d7;
+    border-color: rgba(222, 161, 66, 0.54);
+}
+
+.badge-big-o {
+    background: #edf7ef;
+    border-color: rgba(113, 183, 77, 0.42);
+}
+
+.figure-wrap {
+    margin-top: 12px;
+    border-radius: 24px;
+    padding: 10px 10px 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 252, 0.98));
+    border: 1px solid rgba(223, 232, 238, 0.96);
+}
+
+.figure-wrap svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.detail-card {
+    display: grid;
+    gap: 14px;
+    align-content: start;
+}
+
+.detail-group {
+    display: grid;
+    gap: 10px;
+}
+
+.metric-label {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+}
+
+.focus-list {
+    display: grid;
+    gap: 10px;
+}
+
+.focus-card {
+    border-radius: 18px;
+    border: 1px solid rgba(191, 211, 223, 0.86);
+    background: rgba(255, 255, 255, 0.96);
+    padding: 12px 13px;
+    animation: riseIn 220ms ease both;
+}
+
+.focus-card.move {
+    border-color: rgba(216, 111, 111, 0.42);
+    background: linear-gradient(180deg, rgba(255, 248, 248, 0.98), rgba(255, 255, 255, 0.96));
+}
+
+.focus-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.focus-line strong {
+    font-size: 0.98rem;
+}
+
+.focus-copy,
+.focus-sub,
+.focus-meta {
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.focus-copy {
+    margin-top: 6px;
+    font-size: 0.94rem;
+}
+
+.focus-meta,
+.focus-sub {
+    margin-top: 4px;
+    font-size: 0.9rem;
+}
+
+.focus-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #edf7ef;
+    border: 1px solid rgba(113, 183, 77, 0.42);
+    color: #40632a;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.focus-chip.danger {
+    background: #fff0f0;
+    border-color: rgba(216, 111, 111, 0.44);
+    color: #9b4848;
+}
+
+@keyframes riseIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 1040px) {
+    .stage {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 700px) {
+    .page-shell {
+        width: min(100vw - 14px, 100%);
+        margin: 7px auto;
+        padding: 14px;
+        border-radius: 22px;
+    }
+
+    .state-head {
+        flex-direction: column;
+    }
+
+    .state-badges {
+        justify-content: flex-start;
+    }
+
+    .toolbar,
+    .control-row {
+        gap: 8px;
+    }
+
+    .step-btn,
+    .control-btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    .focus-line {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

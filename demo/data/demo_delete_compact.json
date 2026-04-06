@@ -1,0 +1,329 @@
+{
+  "title": "Demo 2 · Xóa rồi compact",
+  "subtitle": "Xóa một record, rồi dời các cell dữ liệu còn sống để lấp vùng xóa.",
+  "states": [
+    {
+      "short": "Trước khi xóa",
+      "title": "Trước khi xóa",
+      "note": "Page đang có 4 ptr trong header và 4 cell dữ liệu.",
+      "operation": "Page đã nạp 4 record",
+      "timing_ms": 0.0,
+      "timing_text": "0.000 ms",
+      "complexity": "O(1)",
+      "slot_panel_title": "Ptr/slot trong header",
+      "move_panel_title": "Cell dữ liệu bị dời",
+      "page": {
+        "page_size": 256,
+        "header_size": 20,
+        "free_start": 20,
+        "free_end": 105,
+        "free_bytes": 85,
+        "slots": [
+          {
+            "id": 0,
+            "ptr": "ptr1",
+            "cell": "cell1",
+            "label": "Course#1",
+            "status": "active",
+            "offset": 237,
+            "length": 19,
+            "data": "1,Course_1,3,Dept_5"
+          },
+          {
+            "id": 1,
+            "ptr": "ptr2",
+            "cell": "cell2",
+            "label": "Enroll#2",
+            "status": "active",
+            "offset": 217,
+            "length": 20,
+            "data": "99555,34,2023-2,8.93"
+          },
+          {
+            "id": 2,
+            "ptr": "ptr3",
+            "cell": "cell3",
+            "label": "Student#78",
+            "status": "active",
+            "offset": 161,
+            "length": 56,
+            "data": "78,Nguyen Trang,CNTT1,nguyentrang78@gmail.com,05605..."
+          },
+          {
+            "id": 3,
+            "ptr": "ptr4",
+            "cell": "cell4",
+            "label": "Student#128",
+            "status": "active",
+            "offset": 105,
+            "length": 56,
+            "data": "128,Nguyen Minh,CNTT3,nguyenminh128@gmail.com,09681..."
+          }
+        ],
+        "gaps": []
+      },
+      "stable_slots": [
+        {
+          "slot_id": 0,
+          "ptr": "ptr1",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell1",
+          "label": "Course#1",
+          "offset": 237,
+          "length": 19
+        },
+        {
+          "slot_id": 1,
+          "ptr": "ptr2",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell2",
+          "label": "Enroll#2",
+          "offset": 217,
+          "length": 20
+        },
+        {
+          "slot_id": 2,
+          "ptr": "ptr3",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell3",
+          "label": "Student#78",
+          "offset": 161,
+          "length": 56
+        },
+        {
+          "slot_id": 3,
+          "ptr": "ptr4",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell4",
+          "label": "Student#128",
+          "offset": 105,
+          "length": 56
+        }
+      ],
+      "moved_records": []
+    },
+    {
+      "short": "Sau khi xóa",
+      "title": "Sau khi xóa Enroll#2",
+      "note": "ptr2 trong header vẫn còn, nhưng hiện là slot rỗng. Vùng xóa vẫn còn trong vùng dữ liệu.",
+      "operation": "Xóa slot 1",
+      "timing_ms": 0.004,
+      "timing_text": "0.004 ms",
+      "complexity": "O(1)",
+      "slot_panel_title": "Ptr/slot trong header",
+      "move_panel_title": "Cell dữ liệu bị dời",
+      "page": {
+        "page_size": 256,
+        "header_size": 20,
+        "free_start": 20,
+        "free_end": 105,
+        "free_bytes": 85,
+        "slots": [
+          {
+            "id": 0,
+            "ptr": "ptr1",
+            "cell": "cell1",
+            "label": "Course#1",
+            "status": "active",
+            "offset": 237,
+            "length": 19,
+            "data": "1,Course_1,3,Dept_5"
+          },
+          {
+            "id": 1,
+            "ptr": "ptr2",
+            "cell": "cell2",
+            "label": "Enroll#2",
+            "status": "empty"
+          },
+          {
+            "id": 2,
+            "ptr": "ptr3",
+            "cell": "cell3",
+            "label": "Student#78",
+            "status": "active",
+            "offset": 161,
+            "length": 56,
+            "data": "78,Nguyen Trang,CNTT1,nguyentrang78@gmail.com,05605..."
+          },
+          {
+            "id": 3,
+            "ptr": "ptr4",
+            "cell": "cell4",
+            "label": "Student#128",
+            "status": "active",
+            "offset": 105,
+            "length": 56,
+            "data": "128,Nguyen Minh,CNTT3,nguyenminh128@gmail.com,09681..."
+          }
+        ],
+        "gaps": [
+          {
+            "start": 217,
+            "length": 20,
+            "label": "vùng\nxóa"
+          }
+        ]
+      },
+      "stable_slots": [
+        {
+          "slot_id": 0,
+          "ptr": "ptr1",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell1",
+          "label": "Course#1",
+          "offset": 237,
+          "length": 19
+        },
+        {
+          "slot_id": 1,
+          "ptr": "ptr2",
+          "slot_kept": true,
+          "status": "empty"
+        },
+        {
+          "slot_id": 2,
+          "ptr": "ptr3",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell3",
+          "label": "Student#78",
+          "offset": 161,
+          "length": 56
+        },
+        {
+          "slot_id": 3,
+          "ptr": "ptr4",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell4",
+          "label": "Student#128",
+          "offset": 105,
+          "length": 56
+        }
+      ],
+      "moved_records": []
+    },
+    {
+      "short": "Sau compact",
+      "title": "Sau khi compact",
+      "note": "Các ptr vẫn giữ nguyên trong header. Chỉ các cell dữ liệu còn sống bị dời để lấp vùng xóa.",
+      "operation": "Compact page",
+      "timing_ms": 0.013,
+      "timing_text": "0.013 ms",
+      "complexity": "O(n log n)",
+      "slot_panel_title": "Ptr/slot giữ trong header",
+      "move_panel_title": "Cell dữ liệu bị dời",
+      "page": {
+        "page_size": 256,
+        "header_size": 20,
+        "free_start": 20,
+        "free_end": 125,
+        "free_bytes": 105,
+        "slots": [
+          {
+            "id": 0,
+            "ptr": "ptr1",
+            "cell": "cell1",
+            "label": "Course#1",
+            "status": "active",
+            "offset": 237,
+            "length": 19,
+            "data": "1,Course_1,3,Dept_5"
+          },
+          {
+            "id": 1,
+            "ptr": "ptr2",
+            "cell": "cell2",
+            "label": "Enroll#2",
+            "status": "empty"
+          },
+          {
+            "id": 2,
+            "ptr": "ptr3",
+            "cell": "cell3",
+            "label": "Student#78",
+            "status": "active",
+            "offset": 181,
+            "length": 56,
+            "data": "78,Nguyen Trang,CNTT1,nguyentrang78@gmail.com,05605..."
+          },
+          {
+            "id": 3,
+            "ptr": "ptr4",
+            "cell": "cell4",
+            "label": "Student#128",
+            "status": "active",
+            "offset": 125,
+            "length": 56,
+            "data": "128,Nguyen Minh,CNTT3,nguyenminh128@gmail.com,09681..."
+          }
+        ],
+        "gaps": []
+      },
+      "stable_slots": [
+        {
+          "slot_id": 0,
+          "ptr": "ptr1",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell1",
+          "label": "Course#1",
+          "offset": 237,
+          "length": 19
+        },
+        {
+          "slot_id": 1,
+          "ptr": "ptr2",
+          "slot_kept": true,
+          "status": "empty"
+        },
+        {
+          "slot_id": 2,
+          "ptr": "ptr3",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell3",
+          "label": "Student#78",
+          "offset": 181,
+          "length": 56
+        },
+        {
+          "slot_id": 3,
+          "ptr": "ptr4",
+          "slot_kept": true,
+          "status": "active",
+          "cell": "cell4",
+          "label": "Student#128",
+          "offset": 125,
+          "length": 56
+        }
+      ],
+      "moved_records": [
+        {
+          "slot_id": 2,
+          "ptr": "ptr3",
+          "cell": "cell3",
+          "label": "Student#78",
+          "from": 161,
+          "to": 181,
+          "length": 56
+        },
+        {
+          "slot_id": 3,
+          "ptr": "ptr4",
+          "cell": "cell4",
+          "label": "Student#128",
+          "from": 105,
+          "to": 125,
+          "length": 56
+        }
+      ]
+    }
+  ]
+}
