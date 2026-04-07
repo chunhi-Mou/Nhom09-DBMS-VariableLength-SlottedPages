@@ -50,7 +50,7 @@ def run_demo():
     page, slot_labels, _, inserted = seed_page()
     tracker = DemoTracker("demo_delete_compact.json", TITLE, SUBTITLE)
 
-    delete_id = inserted[1][1]
+    delete_id = inserted[1][1] # Lấy slot_id của enrollment_a
     delete_label = slot_labels[delete_id]
     deleted_slot = page._read_slot(delete_id)
     gaps = make_gap(deleted_slot.offset, deleted_slot.length)

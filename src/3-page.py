@@ -121,20 +121,4 @@ class SlottedPage:
         header.free_space_ptr = new_free
         self._write_header(header)
         return moved_records
-
-    def dump(self, title: str = ""):
-        header = self._read_header()
-        print(f"\n[{title}]")
-        print(f"Page size: {self.page_size}B | Header Entries: {header.num_entries} | Free space: {self.free_space()}B")
-        print(f"End of free space: {header.free_space_ptr}")
-        print("-" * 55)
-        print(f"{'Slot ID':<10} {'Status':<10} {'Offset':<15} {'Length':<10}")
-        print("-" * 55)
         
-        for i in range(header.num_entries):
-            slot = self._read_slot(i)
-            if slot.is_empty:
-                print(f"{i:<10} {'DELETED':<10} {'-1':<15} {'0':<10}")
-            else:
-                print(f"{i:<10} {'ACTIVE':<10} {slot.offset:<15} {slot.length:<10}")
-        print("=" * 55)
