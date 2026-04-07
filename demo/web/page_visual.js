@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     const PAGE_WIDTH = 1040;
     const PAGE_MARGIN = 72;
     const STRIP_Y = 126;
@@ -81,6 +81,8 @@
             "stroke-width": "2.2",
             "stroke-dasharray": "8 7",
             "marker-end": "url(#arrowHead)",
+            "class": "anim-draw",
+            "style": `animation-delay: ${depth * 40 + 200}ms;`
         }));
     }
 
@@ -102,6 +104,8 @@
             stroke: "#8ea0ab",
             "stroke-width": "1.5",
             "stroke-dasharray": "6 5",
+            "class": "anim-fade anim-float",
+            "style": `animation-delay: ${index * 60 + 300}ms;`
         }));
 
         const label = createSvg("text", {
@@ -122,6 +126,8 @@
             "stroke-width": "2.1",
             "stroke-dasharray": "8 6",
             "marker-end": "url(#arrowHead)",
+            "class": "anim-draw",
+            "style": `animation-delay: ${index * 60 + 350}ms;`
         }));
     }
 
@@ -165,6 +171,7 @@
             fill: "#ffffff",
             stroke: "#8ca3b2",
             "stroke-width": "2",
+            "class": "anim-fade"
         }));
 
         svg.appendChild(createSvg("rect", {
@@ -175,6 +182,8 @@
             fill: "url(#headerPattern)",
             stroke: "#ac7a21",
             "stroke-width": "2",
+            "class": "anim-slide-down interactive-element",
+            "style": "animation-delay: 0ms;"
         }));
 
         const headerText = createSvg("text", {
@@ -199,6 +208,8 @@
                 fill: isEmpty ? "#f7f1f1" : "url(#ptrPattern)",
                 stroke: isEmpty ? "#bd8b8b" : "#5d88bf",
                 "stroke-width": "1.8",
+                "class": "anim-slide-down interactive-element",
+                "style": `animation-delay: ${(slot.id + 1) * 35}ms;`
             }));
 
             const ptrText = createSvg("text", {
@@ -225,6 +236,8 @@
                 fill: "url(#freePattern)",
                 stroke: "#7ea03a",
                 "stroke-width": "2",
+                "class": "anim-fade interactive-element",
+                "style": "animation-delay: 150ms;"
             }));
         }
 
@@ -264,6 +277,8 @@
                 fill: "url(#gapPattern)",
                 stroke: "#b06565",
                 "stroke-width": "2",
+                "class": "anim-fade interactive-element",
+                "style": "animation-delay: 200ms;"
             }));
 
             const text = createSvg("text", {
@@ -299,6 +314,8 @@
                 fill: `${color}20`,
                 stroke: color,
                 "stroke-width": "2.3",
+                "class": "anim-pop interactive-element",
+                "style": `animation-delay: ${(slot.id + 2) * 50}ms;`
             }));
 
             const title = createSvg("text", {
