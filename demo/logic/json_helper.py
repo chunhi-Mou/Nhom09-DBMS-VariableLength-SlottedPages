@@ -1,14 +1,14 @@
-﻿from pathlib import Path
+from pathlib import Path
 import json
 
-from common import format_ms, shorten
+def format_ms(elapsed_ms: float) -> str:
+    return f"{elapsed_ms:.3f} ms"
+
+def shorten(text: str, limit: int = 44) -> str:
+    return text if len(text) <= limit else text[: limit - 3] + "..."
 
 DEMO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = DEMO_ROOT / "data"
-INSERT_COMPLEXITY = "O(n) tệ nhất"
-DELETE_COMPLEXITY = "O(1)"
-COMPACT_COMPLEXITY = "O(n log n)"
-
 
 def ptr_name(slot_id: int) -> str:
     return f"ptr{slot_id + 1}"
@@ -195,3 +195,46 @@ def log_focus(state: dict):
 def log_payload(label: str, raw_text: str, size: int):
     print(f"\n{label}: {size}B")
     print(f"Dữ liệu: {shorten(raw_text)}")
+
+class DemoTracker:
+    def __init__(self, file_name: str, title: str, subtitle: str):
+        self.file_name = file_name
+        self.title = title
+        self.subtitle = subtitle
+        self.states = []
+
+    def capture(
+        self,
+        page,
+        slot_labels: dict,
+        short: str,
+        title: str,
+        note: str,
+        operation: str,
+        timing_ms: float = 0.0,
+        complexity: str = "O(1)",
+        gaps: list | None = None,
+        moved: dict | None = None,
+        slot_panel_title: str | None = None,
+    ):
+        state = make_state(
+            short=short,
+            title=title,
+            note=note,
+            operation=operation,
+            timing_ms=timing_ms,
+            complexity=complexity,
+            page=page,
+            slot_labels=slot_labels,
+            gaps=gaps,
+            moved=moved,
+            slot_panel_title=slot_panel_title,
+        )
+        self.states.append(state)
+        log_state(state)
+        if moved or slot_panel_title:
+             log_focus(state)
+
+    def save(self):
+        target = write_demo_json(self.file_name, self.title, self.subtitle, self.states)
+        print(f"\nĐã ghi JSON: {target.name}")

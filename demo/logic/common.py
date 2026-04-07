@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from time import perf_counter
@@ -74,62 +74,14 @@ def build_demo_records() -> dict:
     }
 
 
-def format_ms(elapsed_ms: float) -> str:
-    return f"{elapsed_ms:.3f} ms"
-
-
-def time_call(func, *args, **kwargs):
-    start = perf_counter()
-    result = func(*args, **kwargs)
-    return result, (perf_counter() - start) * 1000
-
-
-def shorten(text: str, limit: int = 44) -> str:
-    return text if len(text) <= limit else text[: limit - 3] + "..."
-
-
-def print_state(page, slot_labels: dict, title: str):
-    header = page._read_header()
-    print(f"\n[{title}]")
-    print(
-        f"Header={header.header_size}B | free_start={header.header_size} | "
-        f"free_end={header.free_space_ptr} | free={page.free_space()}B"
-    )
-    if header.num_entries == 0:
-        print("Chưa có slot nào.")
-        return
-
-    for slot_id in range(header.num_entries):
-        slot = page._read_slot(slot_id)
-        label = slot_labels.get(slot_id, "Chưa gán")
-        if slot.is_empty:
-            print(f"Slot {slot_id}: rỗng | nhãn cũ {label}")
-            continue
-        raw = page.get(slot_id).decode("utf-8")
-        print(
-            f"Slot {slot_id}: {label} | off={slot.offset} | len={slot.length} | "
-            f"data={shorten(raw)}"
-        )
-
-
-def insert_seed(page, slot_labels: dict, seed: RecordSeed) -> tuple[int, float]:
-    payload = encode_record(seed.fields)
-    slot_id, elapsed_ms = time_call(page.insert, payload)
-    if slot_id == -1:
-        raise RuntimeError(f"Không đủ chỗ để chèn {seed.label}")
-    slot_labels[slot_id] = seed.label
-    return slot_id, elapsed_ms
-
-
-def delete_slot(page, slot_id: int) -> float:
-    _, elapsed_ms = time_call(page.delete, slot_id)
-    return elapsed_ms
-
-
-def compact_page(page) -> tuple[dict, float]:
-    moved, elapsed_ms = time_call(page.compact)
-    return moved, elapsed_ms
-
+class Timer:
+    def __init__(self):
+        self.ms = 0.0
+    def __enter__(self):
+        self.start = perf_counter()
+        return self
+    def __exit__(self, *args):
+        self.ms = (perf_counter() - self.start) * 1000
 
 def seed_page(page_size: int = 256):
     records = build_demo_records()
@@ -139,7 +91,8 @@ def seed_page(page_size: int = 256):
 
     for key in ["course_a", "enrollment_a", "student_a", "student_b"]:
         seed = records[key]
-        slot_id, elapsed_ms = insert_seed(page, slot_labels, seed)
-        inserted.append((seed, slot_id, elapsed_ms))
+        slot_id = page.insert(encode_record(seed.fields))
+        slot_labels[slot_id] = seed.label
+        inserted.append((seed, slot_id))
 
     return page, slot_labels, records, inserted
