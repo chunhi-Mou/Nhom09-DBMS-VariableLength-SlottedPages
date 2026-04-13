@@ -390,6 +390,35 @@
             svg.appendChild(text);
         });
 
+        state.deleted_ghosts.forEach((ghost) => {
+            const x = layout.mapByte(ghost.offset);
+            const width = layout.mapByte(ghost.offset + ghost.length) - x;
+            const group = createSvg("g", {
+                "class": "delete-ghost",
+            });
+            group.appendChild(createSvg("rect", {
+                x,
+                y: STRIP_Y,
+                width,
+                height: STRIP_H,
+                rx: 8,
+                fill: "url(#gapPattern)",
+                stroke: "#b06565",
+                "stroke-width": "2",
+            }));
+            const text = createSvg("text", {
+                x: x + width / 2,
+                y: STRIP_Y + 44,
+                fill: "#8f5555",
+                "font-size": width > 50 ? "16" : "14",
+                "font-weight": "700",
+                "text-anchor": "middle",
+            });
+            text.textContent = "vùng xóa";
+            group.appendChild(text);
+            svg.appendChild(group);
+        });
+
         activeSlots(page).forEach((slot) => {
             const color = colorFor(slot.id);
             const x = layout.mapByte(slot.offset);
@@ -478,6 +507,27 @@
             "stroke-width": "1.8",
             "stroke-dasharray": "8 7",
         }));
+        const headerCenterX = layout.headerX + HEADER_W / 2;
+        if (freeStartX > headerCenterX) {
+            svg.appendChild(createSvg("line", {
+                x1: headerCenterX,
+                y1: TOP_GUIDE_Y + 10,
+                x2: freeStartX,
+                y2: TOP_GUIDE_Y + 10,
+                stroke: "#667985",
+                "stroke-width": "1.8",
+                "stroke-dasharray": "8 7",
+            }));
+            svg.appendChild(createSvg("line", {
+                x1: headerCenterX,
+                y1: TOP_GUIDE_Y + 10,
+                x2: headerCenterX,
+                y2: STRIP_Y,
+                stroke: "#667985",
+                "stroke-width": "1.8",
+                "stroke-dasharray": "8 7",
+            }));
+        }
         const guideLabelsClose = Math.abs(freeEndX - freeStartX) < 150;
         drawGuide(svg, freeStartX, "free start", {
             dx: guideLabelsClose ? -10 : 0,
@@ -495,11 +545,6 @@
             drawPtrArrow(svg, ptrCenterX, cellCenterX, colorFor(slot.id), index, !state.live);
         });
 
-        if (!state.live || (state.moved_records && state.moved_records.length)) {
-            state.moved_records.forEach((move, index) => {
-                drawMovedMarker(svg, layout, move, index);
-            });
-        }
     }
 
     function createFocusCard(item, type, index) {
@@ -841,7 +886,7 @@
         return {
             ok: true,
             title: `Xóa ${slot.label}`,
-            note: `${ptrName(slotId)} vẫn còn, nhưng đã rỗng. Vùng dữ liệu cũ được giữ lại để nhìn thấy khoảng trống.`,
+            note: `${ptrName(slotId)} vẫn còn, nhưng đã rỗng.`,
             operation: `Delete slot ${slotId}`,
             complexity: "O(1)",
             changed_slots: [slotId],
@@ -882,7 +927,7 @@
             ok: true,
             title: moved.length ? "Compact page" : "Page đã gọn",
             note: moved.length
-                ? "Các record còn dùng trượt về cuối page. Slot id không đổi."
+                ? "Record còn dùng trượt về cuối page, slot id không đổi."
                 : "Không có khoảng trống cần dọn.",
             operation: "Compact page",
             complexity: "O(P) dồn record",
@@ -1070,6 +1115,7 @@
         let autoTimer = null;
         let pageIndex = 0;
         let previousCells = {};
+        let compactGhosts = [];
         let activeTab = "memory";
         let activeEntityTab = "students";
 
@@ -1196,7 +1242,7 @@
                     };
                 }
 
-                if (page.gaps.length) {
+                if (page.gaps.length || liveActiveSlots(page).length) {
                     const compactEvent = liveCompact(page);
                     const moved = compactEvent.moved;
                     event = liveInsert(page, seed);
@@ -1277,6 +1323,7 @@
 
         function pushEvent(event) {
             lastEvent = event;
+            compactGhosts = [];
             if (event.page_changed) {
                 previousCells = {};
             }
@@ -1528,7 +1575,7 @@
                         <td class="tag-cell">${row.__tag || ""}</td>
                         ${cells}
                         <td class="actions-cell">
-                            <button class="sheet-icon danger" data-action="delete-row" data-table="${tableKey}" data-row="${rowIndex}">xoa</button>
+                            <button class="sheet-icon danger" data-action="delete-row" data-table="${tableKey}" data-row="${rowIndex}">xóa</button>
                         </td>
                     </tr>
                 `;
@@ -1765,8 +1812,17 @@
             pushEvent(event);
         });
         compactBtn.addEventListener("click", () => {
-            previousCells = rememberCells(currentPage());
-            pushEvent(timed(() => liveCompact(currentPage())));
+            const page = currentPage();
+            previousCells = rememberCells(page);
+            compactGhosts = page.gaps.map((gap) => ({
+                offset: gap.start,
+                length: gap.length,
+            }));
+            pushEvent(timed(() => {
+                const event = liveCompact(page);
+                event.deleted_ghosts = compactGhosts;
+                return event;
+            }));
         });
         resetBtn.addEventListener("click", () => {
             previousCells = {};

@@ -534,18 +534,18 @@ body::before {
 
 .live-stage .state-badges {
     min-width: 0;
-    width: min(360px, 100%);
+    width: min(430px, 100%);
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(118px, auto) minmax(122px, auto);
+    grid-template-columns: minmax(170px, 1fr) minmax(118px, auto) minmax(122px, auto);
     gap: 8px;
     justify-content: stretch;
 }
 
 .live-stage #operationLabel {
     min-width: 0;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     line-height: 1.2;
     text-align: center;
 }
@@ -1283,6 +1283,23 @@ body::before {
 .delete-ghost {
     transform-box: fill-box;
     transform-origin: center;
+    pointer-events: none;
+    animation: compactGhostFade 520ms var(--ease-out-soft) both;
+}
+
+@keyframes compactGhostFade {
+    0% {
+        opacity: 0.95;
+        transform: scale(1);
+    }
+    45% {
+        opacity: 0.82;
+        transform: scale(0.94);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.78);
+    }
 }
 
 @keyframes cellSettle {
