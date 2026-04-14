@@ -87,6 +87,8 @@
         insert(recordBytes) {
             const recordLen = recordBytes.length;
             let header = this._readHeader();
+
+            // B1 tìm slot rỗng để tái sử dụng, nếu không có thì cần thêm 4B cho slot mới
             const reuseId = this._findReusableSlot(header.numEntries);
             const reqSpace = reuseId !== -1 ? recordLen : recordLen + 4;
             const oldFreeEnd = header.freeSpacePtr;
@@ -94,6 +96,7 @@
             let compacted = false;
 
             if (contiguousFree < reqSpace) {
+                // B2 nếu chỉ thiếu do phân mảnh thì compact một lần để gom free liền khối
                 const totalFree = contiguousFree + this._fragmentedFreeSpace(header.numEntries);
                 if (totalFree < reqSpace) {
                     return {
@@ -125,6 +128,7 @@
             const newOffset = header.freeSpacePtr - recordLen;
             this.data.set(recordBytes, newOffset);
 
+            // B3 nếu tái sử dụng thì giữ nguyên slot id, nếu không thì nối thêm slot mới
             const slotId = reuseId !== -1 ? reuseId : header.numEntries;
             this._writeSlot(slotId, new Slot(newOffset, recordLen));
 
@@ -155,8 +159,10 @@
                 return false;
             }
 
+            // Đánh dấu xóa logic nhưng giữ length cũ để compact thu hồi phần phân mảnh
             this._writeSlot(slotId, new Slot(EMPTY_OFFSET, slot.length));
 
+            // Chỉ co slot directory ở đuôi để không làm đổi RID của slot ở giữa
             while (header.numEntries > 0) {
                 const tailId = header.numEntries - 1;
                 if (!this._readSlot(tailId).isEmpty) {
@@ -192,6 +198,7 @@
                 }
             }
 
+            // Dồn payload về cuối page, slot id giữ nguyên và chỉ cập nhật offset
             activeSlots.sort((a, b) => b[1].offset - a[1].offset);
             let newFree = this.pageSize;
 
