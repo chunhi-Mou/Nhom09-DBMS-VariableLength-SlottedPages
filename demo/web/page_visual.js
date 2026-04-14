@@ -803,6 +803,7 @@
             return false;
         }
 
+        // Bind hàm từ logic.
         byteLength = recordApi.byteLength;
         ptrName = recordApi.ptrName;
         cellName = recordApi.cellName;
@@ -994,6 +995,7 @@
 
             for (let index = 0; index < pages.length; index++) {
                 const page = pages[index];
+                // Gọi logic insert.
                 let event = liveInsert(page, seed);
                 if (event.ok) {
                     pageIndex = index;
@@ -1005,6 +1007,7 @@
                 }
 
                 if (page.gaps.length || liveActiveSlots(page).length) {
+                    // Gọi logic compact.
                     const compactEvent = liveCompact(page);
                     const moved = compactEvent.moved;
                     event = liveInsert(page, seed);
@@ -1256,6 +1259,7 @@
         }
 
         function rowToSeed(tableKey, row) {
+            // Gọi logic LiveData.
             return liveDataApi.rowToSeed(tableKey, row);
         }
 
@@ -1486,6 +1490,7 @@
 
         function render() {
             const page = currentPage();
+            // Build state từ logic record.
             const state = makeLiveState(page, lastEvent, {
                 previousCells,
                 pageCount: pages.length,
@@ -1657,6 +1662,7 @@
             const removedTag = slot && slot.status === "active" ? slot.label : null;
 
             previousCells = rememberCells(page);
+            // Gọi logic delete.
             const event = timed(() => liveDelete(page, slotId));
             if (event.ok && removedTag) {
                 removeUserRowByTag(removedTag);
@@ -1671,6 +1677,7 @@
                 length: gap.length,
             }));
             pushEvent(timed(() => {
+                // Gọi logic compact.
                 const event = liveCompact(page);
                 event.deleted_ghosts = compactGhosts;
                 return event;
@@ -1682,6 +1689,7 @@
             pageIndex = 0;
             clearUserTables();
             pushEvent(timed(() => {
+                // Gọi logic reset.
                 const event = liveReset(currentPage());
                 event.note = "Đã đưa dữ liệu user về trống.";
                 return event;
