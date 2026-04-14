@@ -144,9 +144,47 @@
         const compactThenInsert = movedRecords.length > 0 && hasInsert;
         const compactStepDelay = 210;
         const compactDuration = 540;
+        const compactTotalDuration = Math.max(0, (movedRecords.length - 1) * 80) + compactDuration;
         const insertDelay = compactThenInsert
             ? movedRecords.length * compactStepDelay + compactDuration + 120
             : 0;
+
+        if (state.compact_animation) {
+            const freeRect = svg.querySelector('[data-free-space="true"]');
+            const freeLabel = svg.querySelector('[data-free-label="true"]');
+            if (freeRect) {
+                const previousEnd = typeof state.previous_free_end === "number"
+                    ? state.previous_free_end
+                    : state.page.free_end;
+                const fromEndX = layout.mapByte(previousEnd);
+                const toEndX = layout.mapByte(state.page.free_end);
+                const fromWidth = Math.max(0, fromEndX - layout.rightStartX);
+                const toWidth = Math.max(0, toEndX - layout.rightStartX);
+
+                freeRect.setAttribute("width", String(fromWidth));
+                addAnimate(freeRect, {
+                    attributeName: "width",
+                    from: String(fromWidth),
+                    to: String(toWidth),
+                    dur: `${compactTotalDuration}ms`,
+                    fill: "freeze",
+                    calcMode: "spline",
+                    keySplines: "0.22 1 0.36 1",
+                    keyTimes: "0;1",
+                });
+            }
+
+            if (freeLabel) {
+                addAnimate(freeLabel, {
+                    attributeName: "opacity",
+                    from: "0",
+                    to: "1",
+                    begin: `${compactTotalDuration}ms`,
+                    dur: "260ms",
+                    fill: "freeze",
+                });
+            }
+        }
 
         svg.querySelectorAll(".live-cell-group").forEach((group) => {
             const slotId = Number(group.dataset.slotId);
@@ -317,16 +355,23 @@
         const freeStartX = layout.rightStartX;
         const freeEndX = layout.mapByte(page.free_end);
         const freeWidth = Math.max(0, freeEndX - freeStartX);
+        const previousEndX = typeof state.previous_free_end === "number"
+            ? layout.mapByte(state.previous_free_end)
+            : freeEndX;
+        const initialFreeWidth = state.compact_animation
+            ? Math.max(0, previousEndX - freeStartX)
+            : freeWidth;
         if (freeWidth > 0) {
             svg.appendChild(createSvg("rect", {
                 x: freeStartX,
                 y: STRIP_Y,
-                width: freeWidth,
+                width: initialFreeWidth,
                 height: STRIP_H,
                 fill: "url(#freePattern)",
                 stroke: "#7ea03a",
                 "stroke-width": "2",
                 "class": state.live ? "interactive-element free-flow" : "anim-fade interactive-element",
+                "data-free-space": "true",
                 "style": "animation-delay: 150ms;"
             }));
         }
@@ -339,6 +384,8 @@
                 "font-size": "18",
                 "font-weight": "700",
                 "text-anchor": "middle",
+                "data-free-label": "true",
+                "opacity": state.compact_animation ? "0" : "1",
             });
             const freeLine1 = createSvg("tspan", {
                 x: freeStartX + freeWidth / 2,
@@ -721,43 +768,45 @@
         render();
     }
 
-    const LIVE_RECORDS = [
-        {
-            key: "course_a",
-            label: "Course#1",
-            data: "1,Course_1,3,Dept_5",
-        },
-        {
-            key: "enrollment_a",
-            label: "Enroll#2",
-            data: "99555,34,2023-2,8.93",
-        },
-        {
-            key: "student_a",
-            label: "Student#78",
-            data: "78,Nguyen Trang,CNTT1,nguyentrang78@gmail.com,0560585664",
-        },
-        {
-            key: "student_b",
-            label: "Student#128",
-            data: "128,Nguyen Minh,CNTT3,nguyenminh128@gmail.com,0968171253",
-        },
-        {
-            key: "course_b",
-            label: "Course#10",
-            data: "10,Course_10,4,Dept_5",
-        },
-        {
-            key: "tiny_a",
-            label: "Tiny#A",
-            data: "A,ok",
-        },
-        {
-            key: "wide_a",
-            label: "Wide#A",
-            data: "200,Tran Thi Long Name,CNTT9,tranlongname200@gmail.com,0900000000,ghi-chu-dai",
-        },
-    ];
+    const LIVE_RECORDS = (window.LiveData && Array.isArray(window.LiveData.LIVE_RECORDS))
+        ? window.LiveData.LIVE_RECORDS
+        : [
+            {
+                key: "course_a",
+                label: "Course#1",
+                data: "1,Course_1,3,Dept_5",
+            },
+            {
+                key: "enrollment_a",
+                label: "Enroll#2",
+                data: "99555,34,2023-2,8.93",
+            },
+            {
+                key: "student_a",
+                label: "Student#78",
+                data: "78,Nguyen Trang,CNTT1,nguyentrang78@gmail.com,0560585664",
+            },
+            {
+                key: "student_b",
+                label: "Student#128",
+                data: "128,Nguyen Minh,CNTT3,nguyenminh128@gmail.com,0968171253",
+            },
+            {
+                key: "course_b",
+                label: "Course#10",
+                data: "10,Course_10,4,Dept_5",
+            },
+            {
+                key: "tiny_a",
+                label: "Tiny#A",
+                data: "A,ok",
+            },
+            {
+                key: "wide_a",
+                label: "Wide#A",
+                data: "200,Tran Thi Long Name,CNTT9,tranlongname200@gmail.com,0900000000,ghi-chu-dai",
+            },
+        ];
 
     function byteLength(text) {
         return new TextEncoder().encode(text).length;
@@ -777,6 +826,21 @@
 
     function formatMs(ms) {
         return `${ms.toFixed(3)} ms`;
+    }
+
+    function derivePreviousFreeEnd(previousCells, pageSize) {
+        const cells = Object.values(previousCells || {});
+        if (!cells.length) {
+            return pageSize;
+        }
+
+        let minOffset = pageSize;
+        cells.forEach((cell) => {
+            if (typeof cell.offset === "number" && cell.offset < minOffset) {
+                minOffset = cell.offset;
+            }
+        });
+        return minOffset;
     }
 
     function createLivePage(pageId = 1, pageSize = 256) {
@@ -862,9 +926,9 @@
         if (!slot || slot.status === "empty") {
             return {
                 ok: false,
-                title: "Không có record để xóa",
-                note: `Slot ${slotId} không active, nên thao tác delete không đổi page.`,
-                operation: `Delete slot ${slotId} bỏ qua`,
+                title: "Không có record",
+                note: `Slot ${slotId} rỗng, bỏ qua delete.`,
+                operation: "Delete bỏ qua",
                 complexity: "O(1)",
                 moved: [],
             };
@@ -952,7 +1016,12 @@
     }
 
     function makeLiveState(page, event, context = {}) {
+        const insertSources = event.insert_sources || {};
+        const movedRecords = event.moved || [];
+        const hasInsertSources = Object.keys(insertSources).length > 0;
+        const isCompactionEvent = /compact/i.test(String(event.operation || "")) && !hasInsertSources;
         const headerSize = liveHeaderSize(page);
+        const previousFreeEnd = derivePreviousFreeEnd(context.previousCells, page.pageSize);
         const slots = page.slots.map((slot) => {
             const item = {
                 id: slot.id,
@@ -997,9 +1066,11 @@
             slot_panel_title: "Ptr/slot trong header",
             move_panel_title: "Cell dữ liệu bị dời",
             previous_cells: context.previousCells || {},
+            previous_free_end: previousFreeEnd,
             changed_slots: event.changed_slots || [],
-            insert_sources: event.insert_sources || {},
+            insert_sources: insertSources,
             deleted_ghosts: event.deleted_ghosts || [],
+            compact_animation: isCompactionEvent && movedRecords.length > 0,
             event_kind: event.kind || "",
             page_count: context.pageCount || 1,
             page_index: context.pageIndex || 0,
@@ -1018,9 +1089,66 @@
                 })),
             },
             stable_slots: stableSlots,
-            moved_records: event.moved || [],
+            moved_records: movedRecords,
         };
     }
+
+    function connectSeparatedLogic() {
+        const recordApi = window.PageRecord || {};
+        const coreApi = window.PageCore || {};
+
+        if (typeof recordApi.byteLength === "function") {
+            byteLength = recordApi.byteLength;
+        }
+        if (typeof recordApi.ptrName === "function") {
+            ptrName = recordApi.ptrName;
+        }
+        if (typeof recordApi.cellName === "function") {
+            cellName = recordApi.cellName;
+        }
+        if (typeof recordApi.shorten === "function") {
+            shorten = recordApi.shorten;
+        }
+        if (typeof recordApi.formatMs === "function") {
+            formatMs = recordApi.formatMs;
+        }
+        if (typeof recordApi.makeLiveState === "function") {
+            makeLiveState = recordApi.makeLiveState;
+        }
+
+        if (typeof coreApi.createLivePage === "function") {
+            createLivePage = coreApi.createLivePage;
+        }
+        if (typeof coreApi.liveHeaderSize === "function") {
+            liveHeaderSize = coreApi.liveHeaderSize;
+        }
+        if (typeof coreApi.liveFreeSpace === "function") {
+            liveFreeSpace = coreApi.liveFreeSpace;
+        }
+        if (typeof coreApi.liveReusableSlot === "function") {
+            liveReusableSlot = coreApi.liveReusableSlot;
+        }
+        if (typeof coreApi.liveActiveSlots === "function") {
+            liveActiveSlots = coreApi.liveActiveSlots;
+        }
+        if (typeof coreApi.maxInlineRecordSize === "function") {
+            maxInlineRecordSize = coreApi.maxInlineRecordSize;
+        }
+        if (typeof coreApi.liveInsert === "function") {
+            liveInsert = coreApi.liveInsert;
+        }
+        if (typeof coreApi.liveDelete === "function") {
+            liveDelete = coreApi.liveDelete;
+        }
+        if (typeof coreApi.liveCompact === "function") {
+            liveCompact = coreApi.liveCompact;
+        }
+        if (typeof coreApi.liveReset === "function") {
+            liveReset = coreApi.liveReset;
+        }
+    }
+
+    connectSeparatedLogic();
 
     function renderLiveDemo() {
         const root = document.getElementById("app");
@@ -1065,7 +1193,7 @@
                                 <div class="metric-label">Điều khiển</div>
                                 <div class="live-controls">
                                     <div class="button-grid memory-actions">
-                                        <button class="control-btn primary" id="autoBtn">Tự thêm dữ liệu mẫu</button>
+                                        <button class="control-btn primary" id="scenarioBtn">Start</button>
                                         <button class="control-btn" id="compactBtn">Compact</button>
                                         <button class="control-btn danger" id="resetBtn">Reset</button>
                                     </div>
@@ -1112,7 +1240,7 @@
             complexity: "O(1)",
             moved: [],
         };
-        let autoTimer = null;
+        let scenarioTimer = null;
         let pageIndex = 0;
         let previousCells = {};
         let compactGhosts = [];
@@ -1124,7 +1252,7 @@
         const deleteBtn = document.getElementById("deleteBtn");
         const compactBtn = document.getElementById("compactBtn");
         const resetBtn = document.getElementById("resetBtn");
-        const autoBtn = document.getElementById("autoBtn");
+        const scenarioBtn = document.getElementById("scenarioBtn");
         const metricStrip = document.getElementById("metricStrip");
         const toastStack = document.getElementById("toastStack");
         const tabMemory = document.getElementById("tabMemory");
@@ -1147,61 +1275,65 @@
         const sampleStudentBtn = document.getElementById("sampleStudentBtn");
         const sampleCourseBtn = document.getElementById("sampleCourseBtn");
         const sampleEnrollmentBtn = document.getElementById("sampleEnrollmentBtn");
-        const userTables = {
-            students: {
-                title: "Student",
-                accent: "student",
-                prefix: "S",
-                nextId: 2,
-                columns: ["student_id", "full_name", "class_name", "email", "phone"],
-                rows: [
-                    {
-                        __stt: 1,
-                        __tag: "S#1",
-                        student_id: "78",
-                        full_name: "Nguyen Trang",
-                        class_name: "CNTT1",
-                        email: "nguyentrang78@gmail.com",
-                        phone: "0560585664",
-                    },
-                ],
-            },
-            courses: {
-                title: "Course",
-                accent: "course",
-                prefix: "C",
-                nextId: 2,
-                columns: ["course_id", "course_name", "credits", "dept_name"],
-                rows: [
-                    {
-                        __stt: 1,
-                        __tag: "C#1",
-                        course_id: "1",
-                        course_name: "Course_1",
-                        credits: "3",
-                        dept_name: "Dept_5",
-                    },
-                ],
-            },
-            enrollments: {
-                title: "Enrollment",
-                accent: "enrollment",
-                prefix: "E",
-                nextId: 2,
-                columns: ["student_id", "course_id", "semester", "score"],
-                rows: [
-                    {
-                        __stt: 1,
-                        __tag: "E#1",
-                        student_id: "78",
-                        course_id: "1",
-                        semester: "2023-2",
-                        score: "8.93",
-                    },
-                ],
-            },
-        };
-        const TABLE_ORDER = ["students", "courses", "enrollments"];
+        const userTables = (window.LiveData && typeof window.LiveData.createInitialUserTables === "function")
+            ? window.LiveData.createInitialUserTables()
+            : {
+                students: {
+                    title: "Student",
+                    accent: "student",
+                    prefix: "S",
+                    nextId: 2,
+                    columns: ["student_id", "full_name", "class_name", "email", "phone"],
+                    rows: [
+                        {
+                            __stt: 1,
+                            __tag: "S#1",
+                            student_id: "78",
+                            full_name: "Nguyen Trang",
+                            class_name: "CNTT1",
+                            email: "nguyentrang78@gmail.com",
+                            phone: "0560585664",
+                        },
+                    ],
+                },
+                courses: {
+                    title: "Course",
+                    accent: "course",
+                    prefix: "C",
+                    nextId: 2,
+                    columns: ["course_id", "course_name", "credits", "dept_name"],
+                    rows: [
+                        {
+                            __stt: 1,
+                            __tag: "C#1",
+                            course_id: "1",
+                            course_name: "Course_1",
+                            credits: "3",
+                            dept_name: "Dept_5",
+                        },
+                    ],
+                },
+                enrollments: {
+                    title: "Enrollment",
+                    accent: "enrollment",
+                    prefix: "E",
+                    nextId: 2,
+                    columns: ["student_id", "course_id", "semester", "score"],
+                    rows: [
+                        {
+                            __stt: 1,
+                            __tag: "E#1",
+                            student_id: "78",
+                            course_id: "1",
+                            semester: "2023-2",
+                            score: "8.93",
+                        },
+                    ],
+                },
+            };
+        const TABLE_ORDER = (window.LiveData && Array.isArray(window.LiveData.TABLE_ORDER))
+            ? window.LiveData.TABLE_ORDER
+            : ["students", "courses", "enrollments"];
 
         function currentPage() {
             return pages[pageIndex];
@@ -1494,6 +1626,9 @@
         }
 
         function rowToSeed(tableKey, row) {
+            if (window.LiveData && typeof window.LiveData.rowToSeed === "function") {
+                return window.LiveData.rowToSeed(tableKey, row);
+            }
             const table = userTables[tableKey];
             const values = table.columns.map((column) => String(row[column] || "").trim());
             const hasEmpty = values.some((value) => !value.length);
@@ -1630,6 +1765,106 @@
             panelUser.classList.toggle("active", !memoryActive);
             panelMemory.hidden = !memoryActive;
             panelUser.hidden = memoryActive;
+        }
+
+        function stopScenario() {
+            if (!scenarioTimer) {
+                scenarioBtn.textContent = "Start";
+                return;
+            }
+            clearInterval(scenarioTimer);
+            scenarioTimer = null;
+            scenarioBtn.textContent = "Start";
+        }
+
+        function autoDeleteFirstActive() {
+            for (let pIndex = 0; pIndex < pages.length; pIndex += 1) {
+                const page = pages[pIndex];
+                const firstActive = page.slots.find((slot) => slot.status === "active");
+                if (!firstActive) {
+                    continue;
+                }
+                pageIndex = pIndex;
+                previousCells = rememberCells(page);
+                const event = timed(() => liveDelete(page, firstActive.id));
+                if (event.ok) {
+                    removeUserRowByTag(firstActive.label);
+                }
+                return {
+                    ...event,
+                    operation: "Auto-play: delete",
+                };
+            }
+            return {
+                ok: false,
+                title: "Không có slot active",
+                note: "Kịch bản không tìm thấy record để xóa.",
+                operation: "Auto-play: delete",
+                complexity: "O(P*S)",
+                moved: [],
+            };
+        }
+
+        function autoCompactCurrentPage() {
+            const page = currentPage();
+            previousCells = rememberCells(page);
+            compactGhosts = page.gaps.map((gap) => ({
+                offset: gap.start,
+                length: gap.length,
+            }));
+            return timed(() => {
+                const event = liveCompact(page);
+                event.deleted_ghosts = compactGhosts;
+                event.operation = "Auto-play: compact";
+                return event;
+            });
+        }
+
+        function runAutoScenario() {
+            const steps = [
+                () => autoAddUserRow("students"),
+                () => autoAddUserRow("courses"),
+                () => autoAddUserRow("enrollments"),
+                () => autoAddUserRow("students"),
+                () => autoDeleteFirstActive(),
+                () => autoCompactCurrentPage(),
+                () => autoAddUserRow("courses"),
+                () => autoAddUserRow("enrollments"),
+            ];
+
+            let stepIndex = 0;
+            scenarioBtn.textContent = "Stop";
+            pushEvent({
+                ok: true,
+                title: "Bắt đầu auto-play",
+                note: "Đang chạy kịch bản mẫu insert/delete/compact.",
+                operation: "Auto-play",
+                complexity: "O(K)",
+                timing_ms: 0,
+                moved: [],
+            });
+
+            const runStep = () => {
+                if (stepIndex >= steps.length) {
+                    stopScenario();
+                    pushEvent({
+                        ok: true,
+                        title: "Auto-play hoàn tất",
+                        note: "Kịch bản đã chạy xong.",
+                        operation: "Auto-play",
+                        complexity: "O(K)",
+                        timing_ms: 0,
+                        moved: [],
+                    });
+                    return;
+                }
+                const event = steps[stepIndex]();
+                stepIndex += 1;
+                pushEvent(event);
+            };
+
+            runStep();
+            scenarioTimer = setInterval(runStep, 1200);
         }
 
         function render() {
@@ -1848,32 +2083,17 @@
                 moved: [],
             });
         });
-        autoBtn.addEventListener("click", () => {
-            if (autoTimer) {
-                clearInterval(autoTimer);
-                autoTimer = null;
-                autoBtn.textContent = "Tự thêm dữ liệu mẫu";
+        scenarioBtn.addEventListener("click", () => {
+            if (scenarioTimer) {
+                stopScenario();
                 return;
             }
-            const order = ["students", "courses", "enrollments"];
-            let index = 0;
-            autoBtn.textContent = "Dừng tự thêm";
-            pushEvent(autoAddUserRow(order[index % order.length]));
-            index += 1;
-            autoTimer = setInterval(() => {
-                if (index >= 12) {
-                    clearInterval(autoTimer);
-                    autoTimer = null;
-                    autoBtn.textContent = "Tự thêm dữ liệu mẫu";
-                    return;
-                }
-                pushEvent(autoAddUserRow(order[index % order.length]));
-                index += 1;
-            }, 1150);
+            runAutoScenario();
         });
 
         rebuildMemoryFromTables("Sẵn sàng", "Dữ liệu user đã được nạp.");
         setActiveTab(activeTab);
+        stopScenario();
         render();
     }
 
