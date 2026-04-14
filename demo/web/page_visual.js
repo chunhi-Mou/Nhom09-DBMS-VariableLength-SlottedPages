@@ -642,12 +642,12 @@
         });
     }
 
-    function renderError(message) {
+    function renderError(message, title = "Không tải được dữ liệu") {
         const root = document.getElementById("app");
         root.innerHTML = `
             <main class="page-shell page-shell-error">
                 <section class="canvas-card">
-                    <h1>Không đọc được JSON</h1>
+                    <h1>${title}</h1>
                     <p class="state-note">${message}</p>
                 </section>
             </main>
@@ -768,389 +768,69 @@
         render();
     }
 
-    const LIVE_RECORDS = (window.LiveData && Array.isArray(window.LiveData.LIVE_RECORDS))
-        ? window.LiveData.LIVE_RECORDS
-        : [
-            {
-                key: "course_a",
-                label: "Course#1",
-                data: "1,Course_1,3,Dept_5",
-            },
-            {
-                key: "enrollment_a",
-                label: "Enroll#2",
-                data: "99555,34,2023-2,8.93",
-            },
-            {
-                key: "student_a",
-                label: "Student#78",
-                data: "78,Nguyen Trang,CNTT1,nguyentrang78@gmail.com,0560585664",
-            },
-            {
-                key: "student_b",
-                label: "Student#128",
-                data: "128,Nguyen Minh,CNTT3,nguyenminh128@gmail.com,0968171253",
-            },
-            {
-                key: "course_b",
-                label: "Course#10",
-                data: "10,Course_10,4,Dept_5",
-            },
-            {
-                key: "tiny_a",
-                label: "Tiny#A",
-                data: "A,ok",
-            },
-            {
-                key: "wide_a",
-                label: "Wide#A",
-                data: "200,Tran Thi Long Name,CNTT9,tranlongname200@gmail.com,0900000000,ghi-chu-dai",
-            },
-        ];
+    let byteLength;
+    let ptrName;
+    let cellName;
+    let shorten;
+    let formatMs;
+    let makeLiveState;
 
-    function byteLength(text) {
-        return new TextEncoder().encode(text).length;
-    }
-
-    function ptrName(slotId) {
-        return `ptr${slotId + 1}`;
-    }
-
-    function cellName(slotId) {
-        return `cell${slotId + 1}`;
-    }
-
-    function shorten(text, limit = 54) {
-        return text.length <= limit ? text : `${text.slice(0, limit - 3)}...`;
-    }
-
-    function formatMs(ms) {
-        return `${ms.toFixed(3)} ms`;
-    }
-
-    function derivePreviousFreeEnd(previousCells, pageSize) {
-        const cells = Object.values(previousCells || {});
-        if (!cells.length) {
-            return pageSize;
-        }
-
-        let minOffset = pageSize;
-        cells.forEach((cell) => {
-            if (typeof cell.offset === "number" && cell.offset < minOffset) {
-                minOffset = cell.offset;
-            }
-        });
-        return minOffset;
-    }
-
-    function createLivePage(pageId = 1, pageSize = 256) {
-        return {
-            id: pageId,
-            pageSize,
-            freeEnd: pageSize,
-            slots: [],
-            gaps: [],
-        };
-    }
-
-    function liveHeaderSize(page) {
-        return 4 + page.slots.length * 4;
-    }
-
-    function liveFreeSpace(page) {
-        return page.freeEnd - liveHeaderSize(page);
-    }
-
-    function liveReusableSlot(page) {
-        return page.slots.findIndex((slot) => slot.status === "empty");
-    }
-
-    function liveActiveSlots(page) {
-        return page.slots.filter((slot) => slot.status === "active");
-    }
-
-    function maxInlineRecordSize(page) {
-        return page.pageSize - 8;
-    }
-
-    function liveInsert(page, seed) {
-        const length = byteLength(seed.data);
-        const reuseId = liveReusableSlot(page);
-        const required = length + (reuseId === -1 ? 4 : 0);
-        const oldFreeEnd = page.freeEnd;
-        if (liveFreeSpace(page) < required) {
-            return {
-                ok: false,
-                title: "Page hiện tại không đủ chỗ",
-                note: `${seed.label} cần ${required}B, page này còn ${liveFreeSpace(page)}B liền nhau.`,
-                operation: `Insert ${seed.label} thất bại`,
-                complexity: "O(N) scan slot",
-                moved: [],
-            };
-        }
-
-        const offset = page.freeEnd - length;
-        const slotId = reuseId === -1 ? page.slots.length : reuseId;
-        const reused = reuseId !== -1;
-        page.slots[slotId] = {
-            id: slotId,
-            status: "active",
-            offset,
-            length,
-            label: seed.label,
-            data: seed.data,
-        };
-        page.freeEnd = offset;
-
-        return {
-            ok: true,
-            title: reused ? `Tái sử dụng ptr${slotId + 1}` : `Thêm ${seed.label}`,
-            note: reused
-                ? `${ptrName(slotId)} được dùng lại cho ${seed.label}. Slot id giữ nguyên, dữ liệu mới nằm ở cuối vùng trống.`
-                : `${ptrName(slotId)} mới trỏ tới ${seed.label}.`,
-            operation: reused ? `Reuse slot ${slotId}` : `Insert slot ${slotId}`,
-            complexity: "O(N) scan slot",
-            changed_slots: [slotId],
-            insert_sources: {
-                [slotId]: {
-                    offset: oldFreeEnd,
-                    length,
-                },
-            },
-            moved: [],
-        };
-    }
-
-    function liveDelete(page, slotId) {
-        const slot = page.slots[slotId];
-        if (!slot || slot.status === "empty") {
-            return {
-                ok: false,
-                title: "Không có record",
-                note: `Slot ${slotId} rỗng, bỏ qua delete.`,
-                operation: "Delete bỏ qua",
-                complexity: "O(1)",
-                moved: [],
-            };
-        }
-
-        page.gaps.push({
-            start: slot.offset,
-            length: slot.length,
-            label: "vùng\nxóa",
-            data: slot.data,
-            recordLabel: slot.label,
-        });
-        page.slots[slotId] = {
-            id: slotId,
-            status: "empty",
-            oldLabel: slot.label,
-        };
-
-        return {
-            ok: true,
-            title: `Xóa ${slot.label}`,
-            note: `${ptrName(slotId)} vẫn còn, nhưng đã rỗng.`,
-            operation: `Delete slot ${slotId}`,
-            complexity: "O(1)",
-            changed_slots: [slotId],
-            deleted_ghosts: [{
-                slot_id: slotId,
-                offset: slot.offset,
-                length: slot.length,
-                label: slot.label,
-            }],
-            moved: [],
-        };
-    }
-
-    function liveCompact(page) {
-        const active = liveActiveSlots(page).sort((a, b) => b.offset - a.offset);
-        const moved = [];
-        let newFree = page.pageSize;
-        active.forEach((slot) => {
-            const newOffset = newFree - slot.length;
-            if (newOffset !== slot.offset) {
-                moved.push({
-                    slot_id: slot.id,
-                    ptr: ptrName(slot.id),
-                    cell: cellName(slot.id),
-                    label: slot.label,
-                    from: slot.offset,
-                    to: newOffset,
-                    length: slot.length,
-                });
-                slot.offset = newOffset;
-            }
-            newFree = newOffset;
-        });
-        page.freeEnd = newFree;
-        page.gaps = [];
-
-        return {
-            ok: true,
-            title: moved.length ? "Compact page" : "Page đã gọn",
-            note: moved.length
-                ? "Record còn dùng trượt về cuối page, slot id không đổi."
-                : "Không có khoảng trống cần dọn.",
-            operation: "Compact page",
-            complexity: "O(P) dồn record",
-            changed_slots: moved.map((move) => move.slot_id),
-            moved,
-        };
-    }
-
-    function liveReset(page) {
-        page.pageSize = 256;
-        page.freeEnd = 256;
-        page.slots = [];
-        page.gaps = [];
-        return {
-            ok: true,
-            title: "Page mới",
-            note: "Đã đưa mô phỏng về trạng thái ban đầu.",
-            operation: "Reset page",
-            complexity: "O(1)",
-            moved: [],
-        };
-    }
-
-    function makeLiveState(page, event, context = {}) {
-        const insertSources = event.insert_sources || {};
-        const movedRecords = event.moved || [];
-        const hasInsertSources = Object.keys(insertSources).length > 0;
-        const isCompactionEvent = /compact/i.test(String(event.operation || "")) && !hasInsertSources;
-        const headerSize = liveHeaderSize(page);
-        const previousFreeEnd = derivePreviousFreeEnd(context.previousCells, page.pageSize);
-        const slots = page.slots.map((slot) => {
-            const item = {
-                id: slot.id,
-                ptr: ptrName(slot.id),
-                cell: cellName(slot.id),
-                label: slot.label || slot.oldLabel || "",
-                status: slot.status,
-            };
-            if (slot.status === "active") {
-                item.offset = slot.offset;
-                item.length = slot.length;
-                item.data = shorten(slot.data);
-            }
-            return item;
-        });
-
-        const stableSlots = slots.map((slot) => {
-            const item = {
-                slot_id: slot.id,
-                ptr: slot.ptr,
-                slot_kept: true,
-                status: slot.status,
-            };
-            if (slot.status === "active") {
-                item.cell = slot.cell;
-                item.label = slot.label;
-                item.offset = slot.offset;
-                item.length = slot.length;
-            }
-            return item;
-        });
-
-        return {
-            short: "Live",
-            live: true,
-            title: event.title,
-            note: event.note,
-            operation: event.operation,
-            timing_ms: event.timing_ms || 0,
-            timing_text: formatMs(event.timing_ms || 0),
-            complexity: event.complexity,
-            slot_panel_title: "Ptr/slot trong header",
-            move_panel_title: "Cell dữ liệu bị dời",
-            previous_cells: context.previousCells || {},
-            previous_free_end: previousFreeEnd,
-            changed_slots: event.changed_slots || [],
-            insert_sources: insertSources,
-            deleted_ghosts: event.deleted_ghosts || [],
-            compact_animation: isCompactionEvent && movedRecords.length > 0,
-            event_kind: event.kind || "",
-            page_count: context.pageCount || 1,
-            page_index: context.pageIndex || 0,
-            page: {
-                page_size: page.pageSize,
-                page_id: page.id,
-                header_size: headerSize,
-                free_start: headerSize,
-                free_end: page.freeEnd,
-                free_bytes: liveFreeSpace(page),
-                slots,
-                gaps: page.gaps.map((gap) => ({
-                    start: gap.start,
-                    length: gap.length,
-                    label: gap.label,
-                })),
-            },
-            stable_slots: stableSlots,
-            moved_records: movedRecords,
-        };
-    }
+    let createLivePage;
+    let liveHeaderSize;
+    let liveFreeSpace;
+    let liveReusableSlot;
+    let liveActiveSlots;
+    let maxInlineRecordSize;
+    let liveInsert;
+    let liveDelete;
+    let liveCompact;
+    let liveReset;
 
     function connectSeparatedLogic() {
         const recordApi = window.PageRecord || {};
         const coreApi = window.PageCore || {};
 
-        if (typeof recordApi.byteLength === "function") {
-            byteLength = recordApi.byteLength;
-        }
-        if (typeof recordApi.ptrName === "function") {
-            ptrName = recordApi.ptrName;
-        }
-        if (typeof recordApi.cellName === "function") {
-            cellName = recordApi.cellName;
-        }
-        if (typeof recordApi.shorten === "function") {
-            shorten = recordApi.shorten;
-        }
-        if (typeof recordApi.formatMs === "function") {
-            formatMs = recordApi.formatMs;
-        }
-        if (typeof recordApi.makeLiveState === "function") {
-            makeLiveState = recordApi.makeLiveState;
+        const requiredRecordFns = ["byteLength", "ptrName", "cellName", "shorten", "formatMs", "makeLiveState"];
+        const requiredCoreFns = ["createLivePage", "liveHeaderSize", "liveFreeSpace", "liveReusableSlot", "liveActiveSlots", "maxInlineRecordSize", "liveInsert", "liveDelete", "liveCompact", "liveReset"];
+
+        const missingRecord = requiredRecordFns.filter((name) => typeof recordApi[name] !== "function");
+        const missingCore = requiredCoreFns.filter((name) => typeof coreApi[name] !== "function");
+        if (missingRecord.length || missingCore.length) {
+            console.error("Missing logic API", {
+                missingRecord,
+                missingCore,
+            });
+            return false;
         }
 
-        if (typeof coreApi.createLivePage === "function") {
-            createLivePage = coreApi.createLivePage;
-        }
-        if (typeof coreApi.liveHeaderSize === "function") {
-            liveHeaderSize = coreApi.liveHeaderSize;
-        }
-        if (typeof coreApi.liveFreeSpace === "function") {
-            liveFreeSpace = coreApi.liveFreeSpace;
-        }
-        if (typeof coreApi.liveReusableSlot === "function") {
-            liveReusableSlot = coreApi.liveReusableSlot;
-        }
-        if (typeof coreApi.liveActiveSlots === "function") {
-            liveActiveSlots = coreApi.liveActiveSlots;
-        }
-        if (typeof coreApi.maxInlineRecordSize === "function") {
-            maxInlineRecordSize = coreApi.maxInlineRecordSize;
-        }
-        if (typeof coreApi.liveInsert === "function") {
-            liveInsert = coreApi.liveInsert;
-        }
-        if (typeof coreApi.liveDelete === "function") {
-            liveDelete = coreApi.liveDelete;
-        }
-        if (typeof coreApi.liveCompact === "function") {
-            liveCompact = coreApi.liveCompact;
-        }
-        if (typeof coreApi.liveReset === "function") {
-            liveReset = coreApi.liveReset;
-        }
+        byteLength = recordApi.byteLength;
+        ptrName = recordApi.ptrName;
+        cellName = recordApi.cellName;
+        shorten = recordApi.shorten;
+        formatMs = recordApi.formatMs;
+        makeLiveState = recordApi.makeLiveState;
+
+        createLivePage = coreApi.createLivePage;
+        liveHeaderSize = coreApi.liveHeaderSize;
+        liveFreeSpace = coreApi.liveFreeSpace;
+        liveReusableSlot = coreApi.liveReusableSlot;
+        liveActiveSlots = coreApi.liveActiveSlots;
+        maxInlineRecordSize = coreApi.maxInlineRecordSize;
+        liveInsert = coreApi.liveInsert;
+        liveDelete = coreApi.liveDelete;
+        liveCompact = coreApi.liveCompact;
+        liveReset = coreApi.liveReset;
+
+        return true;
     }
 
-    connectSeparatedLogic();
+    const logicReady = connectSeparatedLogic();
 
     function renderLiveDemo() {
+        if (!logicReady) {
+            renderError("Thiếu logic module. Kiểm tra file models.js / record.js / page.js / data.js trong index.html.", "Thiếu logic");
+            return;
+        }
         const root = document.getElementById("app");
         root.innerHTML = `
             <main class="page-shell live-shell">
@@ -1275,65 +955,15 @@
         const sampleStudentBtn = document.getElementById("sampleStudentBtn");
         const sampleCourseBtn = document.getElementById("sampleCourseBtn");
         const sampleEnrollmentBtn = document.getElementById("sampleEnrollmentBtn");
-        const userTables = (window.LiveData && typeof window.LiveData.createInitialUserTables === "function")
-            ? window.LiveData.createInitialUserTables()
-            : {
-                students: {
-                    title: "Student",
-                    accent: "student",
-                    prefix: "S",
-                    nextId: 2,
-                    columns: ["student_id", "full_name", "class_name", "email", "phone"],
-                    rows: [
-                        {
-                            __stt: 1,
-                            __tag: "S#1",
-                            student_id: "78",
-                            full_name: "Nguyen Trang",
-                            class_name: "CNTT1",
-                            email: "nguyentrang78@gmail.com",
-                            phone: "0560585664",
-                        },
-                    ],
-                },
-                courses: {
-                    title: "Course",
-                    accent: "course",
-                    prefix: "C",
-                    nextId: 2,
-                    columns: ["course_id", "course_name", "credits", "dept_name"],
-                    rows: [
-                        {
-                            __stt: 1,
-                            __tag: "C#1",
-                            course_id: "1",
-                            course_name: "Course_1",
-                            credits: "3",
-                            dept_name: "Dept_5",
-                        },
-                    ],
-                },
-                enrollments: {
-                    title: "Enrollment",
-                    accent: "enrollment",
-                    prefix: "E",
-                    nextId: 2,
-                    columns: ["student_id", "course_id", "semester", "score"],
-                    rows: [
-                        {
-                            __stt: 1,
-                            __tag: "E#1",
-                            student_id: "78",
-                            course_id: "1",
-                            semester: "2023-2",
-                            score: "8.93",
-                        },
-                    ],
-                },
-            };
-        const TABLE_ORDER = (window.LiveData && Array.isArray(window.LiveData.TABLE_ORDER))
-            ? window.LiveData.TABLE_ORDER
-            : ["students", "courses", "enrollments"];
+        const liveDataApi = window.LiveData || {};
+        if (typeof liveDataApi.createInitialUserTables !== "function"
+            || !Array.isArray(liveDataApi.TABLE_ORDER)
+            || typeof liveDataApi.rowToSeed !== "function") {
+            renderError("Thiếu LiveData API. Kiểm tra data.js trong index.html.", "Thiếu dữ liệu logic");
+            return;
+        }
+        const userTables = liveDataApi.createInitialUserTables();
+        const TABLE_ORDER = liveDataApi.TABLE_ORDER;
 
         function currentPage() {
             return pages[pageIndex];
@@ -1626,20 +1256,7 @@
         }
 
         function rowToSeed(tableKey, row) {
-            if (window.LiveData && typeof window.LiveData.rowToSeed === "function") {
-                return window.LiveData.rowToSeed(tableKey, row);
-            }
-            const table = userTables[tableKey];
-            const values = table.columns.map((column) => String(row[column] || "").trim());
-            const hasEmpty = values.some((value) => !value.length);
-            if (hasEmpty) {
-                return null;
-            }
-            const data = values.join(",");
-            return {
-                label: row.__tag || `${table.prefix}#?`,
-                data,
-            };
+            return liveDataApi.rowToSeed(tableKey, row);
         }
 
         function rebuildMemoryFromTables(operation, note) {
@@ -1649,7 +1266,7 @@
 
             TABLE_ORDER.forEach((tableKey) => {
                 userTables[tableKey].rows.forEach((row) => {
-                    row.__slot_ref = "chua ghi page";
+                    row.__slot_ref = "chưa ghi page";
                 });
             });
 
@@ -2066,7 +1683,7 @@
             clearUserTables();
             pushEvent(timed(() => {
                 const event = liveReset(currentPage());
-                event.note = "Đã đưa mô phỏng và dữ liệu user về trống.";
+                event.note = "Đã đưa dữ liệu user về trống.";
                 return event;
             }));
         });
@@ -2097,21 +1714,9 @@
         render();
     }
 
-    async function bootPageDemo(jsonPath) {
-        try {
-            const response = await fetch(jsonPath, { cache: "no-store" });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const config = await response.json();
-            renderDemo(config);
-        } catch (error) {
-            renderError("Hãy mở thư mục này bằng server tĩnh để HTML đọc được file JSON.");
-            console.error(error);
-        }
-    }
-
-    window.renderPageDemo = renderDemo;
-    window.bootPageDemo = bootPageDemo;
-    window.bootLivePageDemo = renderLiveDemo;
+    window.PageVisualView = {
+        renderDemo,
+        renderError,
+        renderLiveDemo,
+    };
 })();
