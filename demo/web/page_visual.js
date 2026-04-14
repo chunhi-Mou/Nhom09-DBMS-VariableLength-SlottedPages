@@ -962,6 +962,123 @@
         }
         const userTables = liveDataApi.createInitialUserTables();
         const TABLE_ORDER = liveDataApi.TABLE_ORDER;
+        const DB_LOAD_ENDPOINT = "/api/data";
+        const DB_SYNC_ENDPOINT = "/api/data";
+
+        let dbSyncWarningShown = false;
+        let dbSyncRunning = false;
+        let dbSyncQueued = false;
+
+        function tableRowsToPayload() {
+            const payload = {};
+            TABLE_ORDER.forEach((tableKey) => {
+                const table = userTables[tableKey];
+                if (!table) {
+                    return;
+                }
+                payload[tableKey] = table.rows.map((row) => {
+                    const normalized = {};
+                    table.columns.forEach((column) => {
+                        normalized[column] = String(row[column] || "").trim();
+                    });
+                    return normalized;
+                });
+            });
+            return payload;
+        }
+
+        function hydrateTableFromRows(tableKey, rows) {
+            const table = userTables[tableKey];
+            if (!table || !Array.isArray(rows)) {
+                return false;
+            }
+
+            table.rows = rows.map((raw, index) => {
+                const row = {
+                    __stt: index + 1,
+                    __tag: `${table.prefix}#${index + 1}`,
+                };
+                table.columns.forEach((column) => {
+                    row[column] = String((raw && raw[column]) || "").trim();
+                });
+                return row;
+            });
+            table.nextId = table.rows.length + 1;
+            return table.rows.length > 0;
+        }
+
+        async function loadDatabaseFromServer() {
+            try {
+                const response = await fetch(DB_LOAD_ENDPOINT, { cache: "no-store" });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const payload = await response.json();
+                let loadedAny = false;
+
+                TABLE_ORDER.forEach((tableKey) => {
+                    const rows = payload && payload[tableKey];
+                    if (hydrateTableFromRows(tableKey, rows)) {
+                        loadedAny = true;
+                    }
+                });
+
+                if (loadedAny) {
+                    rebuildMemoryFromTables("Nạp DB", "Đã nạp dữ liệu từ server.");
+                }
+            } catch (error) {
+                if (!dbSyncWarningShown) {
+                    dbSyncWarningShown = true;
+                    showToast({
+                        ok: false,
+                        operation: "Không tải được DB",
+                        note: "Hãy chạy: python demo/web/server.py --port 5500",
+                    });
+                }
+            }
+        }
+
+        async function writeDatabaseFilesNow() {
+            if (dbSyncRunning) {
+                dbSyncQueued = true;
+                return;
+            }
+
+            dbSyncRunning = true;
+            try {
+                const payload = tableRowsToPayload();
+                const response = await fetch(DB_SYNC_ENDPOINT, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                dbSyncWarningShown = false;
+            } catch (error) {
+                if (!dbSyncWarningShown) {
+                    dbSyncWarningShown = true;
+                    showToast({
+                        ok: false,
+                        operation: "Lưu DB thất bại",
+                        note: "Hãy chạy: python demo/web/server.py --port 5500",
+                    });
+                }
+            } finally {
+                dbSyncRunning = false;
+                if (dbSyncQueued) {
+                    dbSyncQueued = false;
+                    writeDatabaseFilesNow();
+                }
+            }
+        }
+
+        function scheduleDatabaseSync() {
+            writeDatabaseFilesNow();
+        }
 
         function currentPage() {
             return pages[pageIndex];
@@ -1229,6 +1346,8 @@
                 row.__slot_ref = `Page ${page.id} · ${ptrName(slotId)} · ${byteLength(rowToSeed(tableKey, row).data)}B`;
             }
 
+            scheduleDatabaseSync();
+
             return {
                 ...event,
                 operation: "Thêm data mẫu",
@@ -1272,6 +1391,7 @@
                         note: `Đã import ${imported} dòng từ Data (batch).`,
                         timing_ms: performance.now() - start,
                     });
+                    scheduleDatabaseSync();
                 })
                 .catch((error) => {
                     pushEvent({
@@ -1353,6 +1473,8 @@
                 timing_ms: 0,
                 moved: [],
             };
+
+            scheduleDatabaseSync();
         }
 
         function renderUserView() {
@@ -1635,6 +1757,7 @@
                     operation: "Thêm dữ liệu",
                     note: `Đã thêm ${row.__tag}.`,
                 });
+                scheduleDatabaseSync();
             }
             if (action === "add-sample") {
                 const event = autoAddUserRow(tableKey);
@@ -1674,6 +1797,7 @@
                         operation: "Xóa dữ liệu",
                         note: `Đã xóa ${tag}.`,
                     });
+                    scheduleDatabaseSync();
                 } else {
                     pushEvent(deleteEvent);
                 }
@@ -1711,6 +1835,7 @@
             const event = timed(() => liveDelete(page, slotId));
             if (event.ok && removedTag) {
                 removeUserRowByTag(removedTag);
+                scheduleDatabaseSync();
             }
             pushEvent(event);
         });
@@ -1739,6 +1864,7 @@
                 event.note = "Đã đưa dữ liệu user về trống.";
                 return event;
             }));
+            scheduleDatabaseSync();
         });
         pageSelect.addEventListener("change", () => {
             previousCells = {};
@@ -1765,6 +1891,9 @@
         setActiveTab(activeTab);
         stopScenario();
         render();
+        loadDatabaseFromServer().then(() => {
+            render();
+        });
     }
 
     window.PageVisualView = {
