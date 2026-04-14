@@ -140,6 +140,24 @@
         return seeds;
     }
 
+    function getImportPatchCursorState() {
+        const state = {};
+        TABLE_ORDER.forEach((tableKey) => {
+            const rows = patchCache[tableKey] || [];
+            const absoluteCursor = Number(patchCursor[tableKey] || 0);
+            const cacheLength = rows.length;
+            const sourceIndex = cacheLength > 0 ? absoluteCursor % cacheLength : 0;
+
+            state[tableKey] = {
+                absoluteCursor,
+                sourceIndex,
+                sourceLine: sourceIndex + 1,
+                cacheLength,
+            };
+        });
+        return state;
+    }
+
     function createInitialUserTables() {
         return {
             students: {
@@ -247,5 +265,6 @@
         createInitialUserTables,
         rowToSeed,
         importPatchSeeds,
+        getImportPatchCursorState,
     };
 })();

@@ -866,6 +866,7 @@
                             <div class="quick-sample-bar">
                                 <button class="control-btn sample-btn student" id="importPatchBtn">Import Patch</button>
                             </div>
+                            <div class="import-cursor-info" id="importCursorInfo">Cursor: chưa import</div>
                         </div>
                         <aside class="detail-card">
                             <section class="detail-group sidebar-controls">
@@ -952,6 +953,7 @@
         const moveList = document.getElementById("moveList");
         const moveGroup = document.getElementById("moveGroup");
         const importPatchBtn = document.getElementById("importPatchBtn");
+        const importCursorInfo = document.getElementById("importCursorInfo");
         const liveDataApi = window.LiveData || {};
         if (typeof liveDataApi.createInitialUserTables !== "function"
             || !Array.isArray(liveDataApi.TABLE_ORDER)
@@ -1391,6 +1393,7 @@
                         note: `Đã import ${imported} dòng từ Data (batch).`,
                         timing_ms: performance.now() - start,
                     });
+                    updateImportCursorInfo();
                     scheduleDatabaseSync();
                 })
                 .catch((error) => {
@@ -1432,6 +1435,31 @@
         function rowToSeed(tableKey, row) {
             // Gọi logic LiveData.
             return liveDataApi.rowToSeed(tableKey, row);
+        }
+
+        function updateImportCursorInfo() {
+            if (!importCursorInfo) {
+                return;
+            }
+            if (typeof liveDataApi.getImportPatchCursorState !== "function") {
+                importCursorInfo.textContent = "Cursor: không có dữ liệu";
+                return;
+            }
+
+            const cursor = liveDataApi.getImportPatchCursorState();
+            if (!cursor) {
+                importCursorInfo.textContent = "Cursor: không có dữ liệu";
+                return;
+            }
+
+            const formatEntry = (entry) => {
+                if (!entry) {
+                    return "?";
+                }
+                return `${entry.sourceLine}/${entry.cacheLength || 0}`;
+            };
+
+            importCursorInfo.textContent = `Cursor | S: ${formatEntry(cursor.students)} · C: ${formatEntry(cursor.courses)} · E: ${formatEntry(cursor.enrollments)}`;
         }
 
         function rebuildMemoryFromTables(operation, note) {
@@ -1891,7 +1919,9 @@
         setActiveTab(activeTab);
         stopScenario();
         render();
+        updateImportCursorInfo();
         loadDatabaseFromServer().then(() => {
+            updateImportCursorInfo();
             render();
         });
     }
