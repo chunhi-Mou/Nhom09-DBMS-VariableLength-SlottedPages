@@ -864,9 +864,7 @@
                                 <svg id="figure" aria-label="Mô phỏng slotted page"></svg>
                             </div>
                             <div class="quick-sample-bar">
-                                <button class="control-btn sample-btn student" id="sampleStudentBtn">+ Sample Student</button>
-                                <button class="control-btn sample-btn course" id="sampleCourseBtn">+ Sample Course</button>
-                                <button class="control-btn sample-btn enrollment" id="sampleEnrollmentBtn">+ Sample Enrollment</button>
+                                <button class="control-btn sample-btn student" id="importPatchBtn">Import Patch</button>
                             </div>
                         </div>
                         <aside class="detail-card">
@@ -953,13 +951,12 @@
         const slotList = document.getElementById("slotList");
         const moveList = document.getElementById("moveList");
         const moveGroup = document.getElementById("moveGroup");
-        const sampleStudentBtn = document.getElementById("sampleStudentBtn");
-        const sampleCourseBtn = document.getElementById("sampleCourseBtn");
-        const sampleEnrollmentBtn = document.getElementById("sampleEnrollmentBtn");
+        const importPatchBtn = document.getElementById("importPatchBtn");
         const liveDataApi = window.LiveData || {};
         if (typeof liveDataApi.createInitialUserTables !== "function"
             || !Array.isArray(liveDataApi.TABLE_ORDER)
-            || typeof liveDataApi.rowToSeed !== "function") {
+            || typeof liveDataApi.rowToSeed !== "function"
+            || typeof liveDataApi.importPatchSeeds !== "function") {
             renderError("Thiếu LiveData API. Kiểm tra data.js trong index.html.", "Thiếu dữ liệu logic");
             return;
         }
@@ -1237,6 +1234,60 @@
                 operation: "Thêm data mẫu",
                 note: `Đã thêm ${row.__tag}.`,
             };
+        }
+
+        function importPatch(batchSize = 36) {
+            stopScenario();
+            importPatchBtn.disabled = true;
+            importPatchBtn.textContent = "Importing...";
+
+            const start = performance.now();
+            const targetBatch = Math.max(1, Number(batchSize) || 1000);
+
+            liveDataApi.importPatchSeeds(targetBatch)
+                .then((seeds) => {
+                    let imported = 0;
+
+                    seeds.forEach((seed) => {
+                        const table = userTables[seed.tableKey];
+                        if (!table) {
+                            return;
+                        }
+
+                        const row = makeEmptyRow(seed.tableKey);
+                        row.__tag = seed.label || row.__tag;
+
+                        const values = String(seed.data || "").split(",");
+                        table.columns.forEach((column, colIndex) => {
+                            row[column] = (values[colIndex] || "").trim();
+                        });
+                        table.rows.push(row);
+                        imported += 1;
+                    });
+
+                    rebuildMemoryFromTables("Import Patch", `Đã import ${imported} dòng từ dữ liệu init.`);
+                    pushEvent({
+                        ...lastEvent,
+                        operation: "Import Patch",
+                        note: `Đã import ${imported} dòng từ Data (batch).`,
+                        timing_ms: performance.now() - start,
+                    });
+                })
+                .catch((error) => {
+                    pushEvent({
+                        ok: false,
+                        title: "Import Patch thất bại",
+                        note: `Không đọc được dữ liệu init: ${error.message}`,
+                        operation: "Import Patch",
+                        complexity: "O(1)",
+                        timing_ms: performance.now() - start,
+                        moved: [],
+                    });
+                })
+                .finally(() => {
+                    importPatchBtn.disabled = false;
+                    importPatchBtn.textContent = "Import Patch";
+                });
         }
 
         function removeUserRowByTag(tag) {
@@ -1645,14 +1696,8 @@
             render();
         });
 
-        sampleStudentBtn.addEventListener("click", () => {
-            pushEvent(autoAddUserRow("students"));
-        });
-        sampleCourseBtn.addEventListener("click", () => {
-            pushEvent(autoAddUserRow("courses"));
-        });
-        sampleEnrollmentBtn.addEventListener("click", () => {
-            pushEvent(autoAddUserRow("enrollments"));
+        importPatchBtn.addEventListener("click", () => {
+            importPatch(1000);
         });
 
         deleteBtn.addEventListener("click", () => {

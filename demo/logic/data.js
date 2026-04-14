@@ -38,6 +38,107 @@
     ];
 
     const TABLE_ORDER = ["students", "courses", "enrollments"];
+    const DATA_FILE_BY_TABLE = {
+        students: "../../Data/students.txt",
+        courses: "../../Data/courses.txt",
+        enrollments: "../../Data/enrollments.txt",
+    };
+    const TABLE_PREFIX = {
+        students: "S",
+        courses: "C",
+        enrollments: "E",
+    };
+    const patchCache = {
+        students: [],
+        courses: [],
+        enrollments: [],
+    };
+    const patchCursor = {
+        students: 0,
+        courses: 0,
+        enrollments: 0,
+    };
+    let patchSeedCounter = 1;
+
+    async function readFirstLines(url, maxLines = 5000) {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok || !response.body) {
+            throw new Error(`Không đọc được ${url}: HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        const lines = [];
+
+        while (lines.length < maxLines) {
+            const { done, value } = await reader.read();
+            if (done) {
+                break;
+            }
+            buffer += decoder.decode(value, { stream: true });
+            let newlinePos = buffer.indexOf("\n");
+            while (newlinePos !== -1 && lines.length < maxLines) {
+                const line = buffer.slice(0, newlinePos).trim();
+                buffer = buffer.slice(newlinePos + 1);
+                if (line.length > 0) {
+                    lines.push(line);
+                }
+                newlinePos = buffer.indexOf("\n");
+            }
+        }
+
+        if (buffer.trim().length > 0 && lines.length < maxLines) {
+            lines.push(buffer.trim());
+        }
+
+        try {
+            await reader.cancel();
+        } catch (_error) {
+            // Reader may already be closed; safe to ignore.
+        }
+
+        return lines;
+    }
+
+    async function ensurePatchCache(tableKey, minLines = 5000) {
+        const existing = patchCache[tableKey] || [];
+        if (existing.length >= minLines) {
+            return existing;
+        }
+
+        const filePath = DATA_FILE_BY_TABLE[tableKey];
+        const lines = await readFirstLines(filePath, minLines);
+        patchCache[tableKey] = lines;
+        return lines;
+    }
+
+    async function importPatchSeeds(batchSize = 1000) {
+        const safeBatch = Math.max(1, Number(batchSize) || 1000);
+        await Promise.all(TABLE_ORDER.map((tableKey) => ensurePatchCache(tableKey, 5000)));
+
+        const seeds = [];
+        for (let index = 0; index < safeBatch; index += 1) {
+            const tableKey = TABLE_ORDER[index % TABLE_ORDER.length];
+            const rows = patchCache[tableKey];
+            if (!rows || rows.length === 0) {
+                continue;
+            }
+
+            const cursor = patchCursor[tableKey] % rows.length;
+            patchCursor[tableKey] = cursor + 1;
+
+            const prefix = TABLE_PREFIX[tableKey] || "R";
+            seeds.push({
+                tableKey,
+                data: rows[cursor],
+                label: `${prefix}#P${patchSeedCounter}`,
+            });
+            patchSeedCounter += 1;
+        }
+
+        return seeds;
+    }
 
     function createInitialUserTables() {
         return {
@@ -145,5 +246,6 @@
         TABLE_ORDER,
         createInitialUserTables,
         rowToSeed,
+        importPatchSeeds,
     };
 })();
