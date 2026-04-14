@@ -1,33 +1,125 @@
-# Mô Phỏng Cấu Trúc Slotted Page (Variable-Length Records)
+# Mô Phỏng Slotted Page Cho Variable-Length Record
 
-Dự án này mô phỏng cách một Hệ Quản Trị Cơ Sở Dữ Liệu (DBMS) lưu trữ và quản lý các **bản ghi có chiều dài thay đổi** (variable-length records) thông qua cấu trúc **Trang có khe (Slotted Page)**.
+Dự án mô phỏng cách DBMS quản lý bản ghi độ dài thay đổi bằng cấu trúc Slotted Page.
+Mục tiêu chính là quan sát rõ các thao tác insert, delete, reuse slot, compact và giữ ổn định Record ID `(page_id, slot_id)`.
 
-## Tổng Quan Về Slotted Page
-Slotted Page tối ưu không gian lưu trữ bằng cách chia một trang thành 2 phần di chuyển ngược chiều nhau:
-- **Header (Đầu trang):** Phát triển từ trên xuống, chứa *Danh mục khe (Slot Directory)*. Mỗi khe lưu thông tin `[offset, chiều dài]` của bản ghi tương ứng.
-- **Data (Cuối trang):** Phát triển từ dưới lên, chứa dữ liệu thực tế của các bản ghi.
+## Kiến Trúc Hiện Tại
 
-**Giải quyết bài toán gì?**
-Ngăn chặn lãng phí bộ nhớ do phân mảnh. Cho phép dữ liệu thoải mái thay đổi kích thước, dịch chuyển bên trong trang (dồn trang - compact) mà **không làm thay đổi Record ID** (địa chỉ ảo dạng `Page ID, Slot ID` mà các Index bên ngoài đang dùng).
+### 1) Tầng logic Slotted Page
+- `demo/logic/page.js`
+  - Cấu trúc lõi: `Header + Slot Directory + Payload`
+  - Các thao tác vật lý: `insert`, `delete`, `compact`, `snapshot`
+  - Quy tắc chính:
+    - Ưu tiên tái sử dụng slot rỗng
+    - Nếu thiếu bộ nhớ trống liền khối nhưng tổng bộ nhớ trống đủ thì compact rồi chèn
+    - Chỉ co slot directory khi slot rỗng nằm ở đuôi
+- `demo/logic/record.js`
+  - Hàm encode/decode record
+  - Hàm dựng trạng thái mô phỏng để render
+- `demo/logic/models.js`
+  - Model `Student`, `Course`, `Enrollment`
+- `demo/logic/data.js`
+  - Nạp dữ liệu patch từ thư mục `Data`
+  - Theo dõi cursor import theo từng bảng
 
-## Độ Phức Tạp Thuật Toán (Phạm vi 1 Trang)
-- **Truy xuất (Search):** `O(1)` - Tra cứu `offset` từ khe để nhảy thẳng tới dữ liệu.
-- **Xóa (Delete):** `O(1)` - Đánh dấu khe là rỗng (`offset = -1`). Không tốn sức dịch chuyển dữ liệu ngay lúc xóa.
-- **Chèn (Insert):** 
-  - `O(N)` để quét tìm khe tái sử dụng (N là số lượng khe).
-  - `O(P)` nếu bộ nhớ bị xé lẻ, hệ thống phải kích hoạt dồn trang (Compact) (P là kích thước trang).
-- **Cập nhật (Update):** `O(1)` nếu nhẹ đi/giữ nguyên. `O(P)` nếu bản ghi phình to phải dồn không gian.
+### 2) Tầng giao diện web
+- `demo/web/index.html`
+- `demo/web/page_visual.js`
+- `demo/web/page_visual.css`
+- `demo/web/page_controller.js`
 
-## Cấu Trúc Mã Nguồn (Python)
-- `1-data.py`: Sinh bộ dữ liệu giả lập (Sinh viên, Lớp, Đăng ký môn học) có các trường biến độ dài.
-- `2-record.py`: Đóng gói (encode)/giải nén (decode) dữ liệu thành luồng byte.
-- `3-page.py`: **Chứa logic cốt lõi** - Hiện thực hóa lớp `SlottedPage` với các tương tác vật lý (viết Header, cấp slot, Insert, Delete, Compact).
-- `demo/logic/`: Các kịch bản chạy thử (VD: Xóa bản ghi và xem ID slot vẫn giữ nguyên khi bộ nhớ bị dồn lại).
+### 3) Tầng server Python (serve HTML + lắng nghe API)
+- `demo/web/server.py`
+  - Serve trang demo
+  - Lắng nghe API đọc/ghi dữ liệu
+  - Đồng bộ xuống:
+    - `Database/database-Student.txt`
+    - `Database/database-Course.txt`
+    - `Database/database-Enrollment.txt`
+
+## Luồng Slotted Page Cốt Lõi
+1. Insert record vào vùng nhớ trống liên tiếp khả dụng
+2. Slot directory lưu `(offset, length)` cho từng slot
+3. Delete chỉ đánh dấu slot rỗng, không dồn dữ liệu ngay
+4. Khi phân mảnh tăng, compact dồn record lại thành một khối bộ nhớ trống liên tục
+5. RID ổn định vì slot id không đổi khi record dịch chuyển
+
+## Độ Phức Tạp (Trong 1 Page)
+- Search: `O(1)` theo slot id
+- Delete: `O(1)` đánh dấu rỗng
+- Insert:
+  - `O(N)` quét slot tái sử dụng
+  - `O(P)` nếu cần compact
+- Compact: `O(P)` theo dữ liệu trong page
+
+## Cách Chạy Demo
+
+### Yêu cầu
+- Python 3.10+
+- Trình duyệt web
+
+### Chạy server HTML + Python lắng nghe sự kiện
+Tại thư mục gốc project, chạy:
+
+```bash
+python demo/web/server.py --port 5500
+```
+
+Mở trình duyệt:
+
+```text
+http://127.0.0.1:5500/demo/web/index.html
+```
+
+Lưu ý:
+- `server.py` là điểm chạy chính cho demo hiện tại
+- Server này vừa serve HTML vừa lắng nghe API đồng bộ dữ liệu
+
+## API Demo
+- `GET /api/data`
+  - Đọc dữ liệu hiện tại từ 3 file trong `Database`
+- `POST /api/data`
+  - Ghi full dữ liệu từ UI xuống 3 file `Database`
+- `POST /api/data/op`
+  - Hỗ trợ thao tác mức bản ghi (`insert`, `update`, `delete` theo line)
+
+## Cấu Trúc Thư Mục
+
+```text
+Data/
+  students.txt
+  courses.txt
+  enrollments.txt
+
+Database/
+  database-Student.txt
+  database-Course.txt
+  database-Enrollment.txt
+
+demo/
+  logic/
+    data.js
+    models.js
+    page.js
+    record.js
+  web/
+    index.html
+    page_controller.js
+    page_visual.css
+    page_visual.js
+    server.py
+
+src/
+  1-data.py
+  2-record.py
+  3-page.py
+```
 
 ---
-*Thực hiện bởi: Nhóm 09 - Lớp D23CQCE06-B (Học Viện Công Nghệ Bưu Chính Viễn Thông)*
 
-Thành viên nhóm 9:
+Thực hiện bởi Nhóm 09 - D23CQCE06-B - Học viện Công nghệ Bưu chính Viễn thông
+
+Thành viên:
 1. Phùng Thu Hương - B23DCVT201
 2. Chu Tuyết Nhi - B23DCCE075
 3. Lê Như Quỳnh - B23DCCE081
