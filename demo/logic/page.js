@@ -60,6 +60,21 @@
             return header.freeSpacePtr - header.headerSize;
         }
 
+        _freeSpaceWithHeader(header) {
+            return header.freeSpacePtr - header.headerSize;
+        }
+
+        _fragmentedFreeSpace(numEntries) {
+            let total = 0;
+            for (let i = 0; i < numEntries; i += 1) {
+                const slot = this._readSlot(i);
+                if (slot.isEmpty && slot.length > 0) {
+                    total += slot.length;
+                }
+            }
+            return total;
+        }
+
         _findReusableSlot(numEntries) {
             for (let i = 0; i < numEntries; i += 1) {
                 if (this._readSlot(i).isEmpty) {
@@ -71,13 +86,40 @@
 
         insert(recordBytes) {
             const recordLen = recordBytes.length;
-            const header = this._readHeader();
+            let header = this._readHeader();
             const reuseId = this._findReusableSlot(header.numEntries);
             const reqSpace = reuseId !== -1 ? recordLen : recordLen + 4;
             const oldFreeEnd = header.freeSpacePtr;
+            let contiguousFree = this._freeSpaceWithHeader(header);
+            let compacted = false;
 
-            if (this.freeSpace() < reqSpace) {
-                return { ok: false, reuseId, oldFreeEnd };
+            if (contiguousFree < reqSpace) {
+                const totalFree = contiguousFree + this._fragmentedFreeSpace(header.numEntries);
+                if (totalFree < reqSpace) {
+                    return {
+                        ok: false,
+                        reuseId,
+                        oldFreeEnd,
+                        contiguousFree,
+                        totalFree,
+                        compacted,
+                    };
+                }
+
+                this.compact();
+                compacted = true;
+                header = this._readHeader();
+                contiguousFree = this._freeSpaceWithHeader(header);
+                if (contiguousFree < reqSpace) {
+                    return {
+                        ok: false,
+                        reuseId,
+                        oldFreeEnd,
+                        contiguousFree,
+                        totalFree: contiguousFree,
+                        compacted,
+                    };
+                }
             }
 
             const newOffset = header.freeSpacePtr - recordLen;
@@ -99,6 +141,7 @@
                 oldFreeEnd,
                 offset: newOffset,
                 length: recordLen,
+                compacted,
             };
         }
 
@@ -111,7 +154,17 @@
             if (slot.isEmpty) {
                 return false;
             }
-            this._writeSlot(slotId, new Slot(EMPTY_OFFSET, 0));
+
+            this._writeSlot(slotId, new Slot(EMPTY_OFFSET, slot.length));
+
+            while (header.numEntries > 0) {
+                const tailId = header.numEntries - 1;
+                if (!this._readSlot(tailId).isEmpty) {
+                    break;
+                }
+                header.numEntries -= 1;
+            }
+            this._writeHeader(header);
             return true;
         }
 
@@ -254,21 +307,19 @@
         const store = ensureStore(page);
         const text = String(seed.data || "");
         const recordBytes = new TextEncoder().encode(text);
-        const reuseId = liveReusableSlot(page);
-        const required = recordBytes.length + (reuseId === -1 ? 4 : 0);
 
-        if (store.freeSpace() < required) {
+        const result = store.insert(recordBytes);
+        if (!result.ok) {
             return {
                 ok: false,
                 title: "Page hiện tại không đủ chỗ",
-                note: `${seed.label} cần ${required}B, page này còn ${store.freeSpace()}B liền nhau.`,
+                note: `${seed.label} cần thêm chỗ. Liền nhau: ${result.contiguousFree || 0}B, tổng khả dụng: ${result.totalFree || 0}B.`,
                 operation: `Insert ${seed.label} thất bại`,
                 complexity: "O(N) scan slot",
                 moved: [],
             };
         }
 
-        const result = store.insert(recordBytes);
         const slotId = result.slotId;
         const reused = result.reuseId !== -1;
 
@@ -284,7 +335,7 @@
             note: reused
                 ? `${ptrName(slotId)} được dùng lại cho ${seed.label}. Slot id giữ nguyên, dữ liệu mới nằm ở cuối vùng trống.`
                 : `${ptrName(slotId)} mới trỏ tới ${seed.label}.`,
-            operation: reused ? `Reuse slot ${slotId}` : `Insert slot ${slotId}`,
+            operation: result.compacted ? "Compact + insert" : (reused ? `Reuse slot ${slotId}` : `Insert slot ${slotId}`),
             complexity: "O(N) scan slot",
             changed_slots: [slotId],
             insert_sources: {
