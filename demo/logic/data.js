@@ -53,6 +53,11 @@
         courses: [],
         enrollments: [],
     };
+    const patchCacheLoaded = {
+        students: false,
+        courses: false,
+        enrollments: false,
+    };
     const patchCursor = {
         students: 0,
         courses: 0,
@@ -60,7 +65,7 @@
     };
     let patchSeedCounter = 1;
 
-    async function readFirstLines(url, maxLines = 5000) {
+    async function readFirstLines(url, maxLines = Number.POSITIVE_INFINITY) {
         const response = await fetch(url, { cache: "no-store" });
         if (!response.ok || !response.body) {
             throw new Error(`Không đọc được ${url}: HTTP ${response.status}`);
@@ -101,8 +106,11 @@
         return lines;
     }
 
-    async function ensurePatchCache(tableKey, minLines = 5000) {
+    async function ensurePatchCache(tableKey, minLines = Number.POSITIVE_INFINITY) {
         const existing = patchCache[tableKey] || [];
+        if (patchCacheLoaded[tableKey]) {
+            return existing;
+        }
         if (existing.length >= minLines) {
             return existing;
         }
@@ -110,12 +118,13 @@
         const filePath = DATA_FILE_BY_TABLE[tableKey];
         const lines = await readFirstLines(filePath, minLines);
         patchCache[tableKey] = lines;
+        patchCacheLoaded[tableKey] = true;
         return lines;
     }
 
     async function importPatchSeeds(batchSize = 1000) {
         const safeBatch = Math.max(1, Number(batchSize) || 1000);
-        await Promise.all(TABLE_ORDER.map((tableKey) => ensurePatchCache(tableKey, 5000)));
+        await Promise.all(TABLE_ORDER.map((tableKey) => ensurePatchCache(tableKey)));
 
         const seeds = [];
         for (let index = 0; index < safeBatch; index += 1) {
